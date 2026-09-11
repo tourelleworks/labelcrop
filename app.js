@@ -2,12 +2,12 @@
 // LabelCrop – app.js
 //
 // Die Oberfläche: Dateien entgegennehmen, Einstellungen einlesen,
-// Vorschau zeichnen (pdf.js), Ergebnis erzeugen (cropper.js) und
-// speichern. Alles bleibt im Browser – nichts wird hochgeladen,
-// denn Versandetiketten enthalten Adressen.
+// Vorschau zeichnen (pdf.js), Ergebnis erzeugen (cropper.js),
+// drucken und speichern. Alles bleibt im Browser – nichts wird
+// hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.2";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.3";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -22,6 +22,7 @@ const DEFAULT_MARGIN_MM = 2;    // Vorgabe bei festen Formaten: Drucker lassen d
 // "Wird verarbeitet" stehen. "print" zeichnet per setTimeout, also immer.
 const RENDER_INTENT = "print";
 const SETTINGS_KEY = "labelcrop-settings";   // Schlüssel im localStorage dieses Browsers
+const PRINT_FRAME_LIFETIME_MS = 120000;      // so lange bleibt der unsichtbare Druck-Rahmen bestehen
 
 // Welche Formularfelder gemerkt werden. Die Vorgaben stehen hier und nicht im
 // HTML, damit "Zurücksetzen" und der erste Start dieselben Werte liefern.
@@ -36,6 +37,7 @@ const SETTINGS_DEFAULTS = {
   targetHeight: "50",
   scaleMode: "fit",
   rotate: "auto",
+  placement: "center",
   margin: "0",
 };
 
@@ -64,13 +66,18 @@ const dom = {
   targetHeight: byId("target-height"),
   scaleMode: byId("scale-mode"),
   rotate: byId("rotate"),
+  placement: byId("placement"),
   margin: byId("margin"),
+  profileSummary: byId("profile-summary"),
   resultsBar: byId("results-bar"),
   resultList: byId("result-list"),
   resultCount: byId("result-count"),
+  printAll: byId("print-all"),
   saveAll: byId("save-all"),
   saveMerged: byId("save-merged"),
   clearAll: byId("clear-all"),
+  testPrint: byId("test-print"),
+  testPrintSave: byId("test-print-save"),
   resetSettings: byId("reset-settings"),
   settingsStatus: byId("settings-status"),
   template: byId("result-template"),
@@ -90,6 +97,7 @@ const SETTINGS_FIELDS = {
   targetHeight: dom.targetHeight,
   scaleMode: dom.scaleMode,
   rotate: dom.rotate,
+  placement: dom.placement,
   margin: dom.margin,
 };
 
@@ -155,6 +163,7 @@ function readSettings() {
     options: {
       scaleMode: dom.scaleMode.value,
       rotate: dom.rotate.value,
+      placement: dom.placement.value,
       margin: Math.max(0, numberValue(dom.margin, 0)),
     },
   };
@@ -169,8 +178,24 @@ function updateSettingsVisibility() {
   dom.customSource.hidden = !(profile !== null && profile.custom);
   const target = LabelCropProfiles.findTarget(dom.target.value);
   dom.customTarget.hidden = !(target !== null && target.custom);
-  // Bei "Wie Ausschnitt" gibt es nichts einzupassen – der Maßstab ist immer 1:1.
+  // Bei "Wie Ausschnitt" gibt es nichts einzupassen und nichts zu platzieren.
   dom.scaleMode.disabled = isSourceSizeTarget();
+  dom.placement.disabled = isSourceSizeTarget();
+  updateProfileSummary();
+}
+
+// Eine Zeile, die auch bei eingeklappten Feineinstellungen zeigt, was gilt.
+function updateProfileSummary() {
+  const settings = readSettings();
+  const described = LabelCrop.describeOptions(settings.options);
+  const parts = [];
+  if (!isSourceSizeTarget()) {
+    parts.push(described.scale);
+    parts.push(described.placement);
+  }
+  parts.push("Drehung " + described.rotation);
+  parts.push("Rand " + String(settings.options.margin).replace(".", ",") + " mm");
+  dom.profileSummary.textContent = parts.join(" · ");
 }
 
 function onTargetChanged() {
@@ -207,11 +232,18 @@ function selectHasOption(select, value) {
   return false;
 }
 
+// Alte gespeicherte Werte aus Version 0.2 auf die neuen Auswahlwerte abbilden.
+function migrateSettingValue(key, value) {
+  if (key === "rotate" && value === "none") { return "0"; }
+  if (key === "rotate" && value === "rotate") { return "90"; }
+  return value;
+}
+
 function applySettings(values) {
   for (const key in SETTINGS_FIELDS) {
     const field = SETTINGS_FIELDS[key];
     let value = SETTINGS_DEFAULTS[key];
-    if (typeof values[key] === "string") { value = values[key]; }
+    if (typeof values[key] === "string") { value = migrateSettingValue(key, values[key]); }
     if (field.tagName === "SELECT" && !selectHasOption(field, value)) {
       value = SETTINGS_DEFAULTS[key];
     }
@@ -334,6 +366,7 @@ function createEntry(name) {
   };
   nextEntryId += 1;
   element.querySelector(".result-name").textContent = name;
+  element.querySelector(".result-print").addEventListener("click", function () { printEntry(entry); });
   element.querySelector(".result-save").addEventListener("click", function () { saveEntry(entry); });
   element.querySelector(".result-remove").addEventListener("click", function () { removeEntry(entry); });
   return entry;
@@ -401,9 +434,9 @@ async function processEntry(entry) {
     entry.element.classList.remove("has-error");
     const first = result.pages[0];
     if (!first.layout.fits) {
-      warnings.push("Der Ausschnitt passt nicht auf das Zielformat und würde abgeschnitten – „Einpassen“ wählen oder ein größeres Format nehmen.");
+      warnings.push("Der Ausschnitt passt nicht auf das Etikett und würde abgeschnitten – „Einpassen“ wählen oder ein größeres Format nehmen.");
     }
-    renderEntryInfo(entry, profileNote, first, warnings);
+    renderEntryInfo(entry, profileNote, first, settings, warnings);
     await drawSourcePreview(entry, first.box, generation);
     await drawResultPreview(entry, generation);
     if (generation === entry.generation) { setEntryStatus(entry, ""); }
@@ -424,7 +457,7 @@ function describeSize(widthPt, heightPt) {
   return formatMm(LabelCrop.ptToMm(widthPt)) + " × " + formatMm(LabelCrop.ptToMm(heightPt)) + " mm";
 }
 
-function renderEntryInfo(entry, profileNote, pageInfo, warnings) {
+function renderEntryInfo(entry, profileNote, pageInfo, settings, warnings) {
   const element = entry.element;
   let meta = "Quelle " + describeSize(entry.mediaBox.width, entry.mediaBox.height);
   if (entry.pageCount > 1) { meta += ", " + entry.pageCount + " Seiten"; }
@@ -434,10 +467,17 @@ function renderEntryInfo(entry, profileNote, pageInfo, warnings) {
   const layout = pageInfo.layout;
   let text = "Ergebnis " + describeSize(layout.pageWidth, layout.pageHeight);
   text += " · Maßstab " + Math.round(layout.scale * 100) + " %";
-  if (layout.rotation === 90) {
-    text += " · 90° gedreht";
-  } else {
+  if (layout.rotation === 0) {
     text += " · nicht gedreht";
+  } else {
+    text += " · " + layout.rotation + "° gedreht";
+  }
+  if (typeof settings.target.width === "number") {
+    if (settings.options.placement === "top") {
+      text += " · oben bündig";
+    } else {
+      text += " · zentriert";
+    }
   }
   if (entry.pageCount > 1) { text += " · " + entry.pageCount + " Seiten"; }
   element.querySelector(".result-layout").textContent = text;
@@ -561,8 +601,37 @@ async function drawResultPreview(entry, generation) {
 }
 
 // ============================================================
-// Speichern
+// Drucken und speichern
 // ============================================================
+
+// Im Browser führt kein Weg am Druckdialog vorbei. Die PDF wird in einem
+// unsichtbaren Rahmen geladen und von dort gedruckt; so bekommt der Dialog
+// die richtige Seitengröße. Klappt das nicht (z. B. Safari), öffnet sich die
+// PDF in einem neuen Tab, wo Strg+P weiterhilft.
+function printPdf(bytes) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const frame = document.createElement("iframe");
+  frame.className = "print-frame";
+  frame.setAttribute("aria-hidden", "true");
+  frame.title = "Druckvorlage";
+  frame.addEventListener("load", function () {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch (error) {
+      console.warn("Direktes Drucken nicht möglich, öffne die PDF stattdessen:", error);
+      window.open(url, "_blank");
+    }
+    // Der Druckdialog braucht den Rahmen noch eine Weile; danach aufräumen.
+    setTimeout(function () {
+      frame.remove();
+      URL.revokeObjectURL(url);
+    }, PRINT_FRAME_LIFETIME_MS);
+  });
+  frame.src = url;
+  document.body.appendChild(frame);
+}
 
 function downloadBytes(bytes, fileName) {
   const blob = new Blob([bytes], { type: "application/pdf" });
@@ -575,6 +644,11 @@ function downloadBytes(bytes, fileName) {
   link.remove();
   // Der Browser braucht die URL noch kurz für den Download, danach freigeben.
   setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+}
+
+function printEntry(entry) {
+  if (entry.result === null) { return; }
+  printPdf(entry.result.bytes);
 }
 
 function saveEntry(entry) {
@@ -607,18 +681,51 @@ function dateStamp() {
   return now.getFullYear() + "-" + pad2(now.getMonth() + 1) + "-" + pad2(now.getDate());
 }
 
-async function saveMerged() {
+// Alle fertigen Labels als eine PDF, eine Seite je Label – für Stapel am Etikettendrucker.
+async function mergedResults() {
   const list = [];
   for (const entry of entries) {
     if (entry.result !== null) { list.push(entry.result.bytes); }
   }
-  if (list.length === 0) { return; }
+  if (list.length === 0) { return null; }
+  return LabelCrop.mergePdfs(list);
+}
+
+async function saveMerged() {
   try {
-    const bytes = await LabelCrop.mergePdfs(list);
+    const bytes = await mergedResults();
+    if (bytes === null) { return; }
     downloadBytes(bytes, "labels_" + dateStamp() + ".pdf");
   } catch (error) {
     console.error(error);
     showMessage("Zusammenführen fehlgeschlagen: " + error.message, "error");
+  }
+}
+
+async function printAll() {
+  try {
+    const bytes = await mergedResults();
+    if (bytes === null) { return; }
+    printPdf(bytes);
+  } catch (error) {
+    console.error(error);
+    showMessage("Drucken fehlgeschlagen: " + error.message, "error");
+  }
+}
+
+// Testdruck (Konzept 6.4): einmal pro Drucker, um Format, Drehung und Skalierung zu prüfen.
+async function testPrint(saveInstead) {
+  const settings = readSettings();
+  try {
+    const bytes = await LabelCrop.testPrintPdf(settings.target, settings.options);
+    if (saveInstead) {
+      downloadBytes(bytes, "labelcrop-testdruck.pdf");
+    } else {
+      printPdf(bytes);
+    }
+  } catch (error) {
+    console.error(error);
+    showMessage("Testdruck fehlgeschlagen: " + error.message, "error");
   }
 }
 
@@ -650,6 +757,7 @@ function updateResultsBar() {
   if (entries.length !== 1) { text += "en"; }
   if (ready !== entries.length) { text += " (" + ready + " fertig)"; }
   dom.resultCount.textContent = text;
+  dom.printAll.disabled = ready === 0;
   dom.saveAll.disabled = ready === 0;
   dom.saveMerged.disabled = ready === 0;
 }
@@ -720,7 +828,10 @@ function bindEvents() {
   });
   dom.target.addEventListener("change", onTargetChanged);
   dom.margin.addEventListener("input", function () { marginTouched = true; });
-  dom.form.addEventListener("input", scheduleReprocess);
+  dom.form.addEventListener("input", function () {
+    updateProfileSummary();
+    scheduleReprocess();
+  });
   // "input" feuert bei Tastatureingaben, "change" bei Auswahlfeldern – beides
   // soll gemerkt werden. Erst nach onTargetChanged, damit der automatische
   // Rand mitgespeichert wird.
@@ -728,7 +839,10 @@ function bindEvents() {
   dom.form.addEventListener("change", saveSettings);
   dom.form.addEventListener("submit", function (event) { event.preventDefault(); });
   dom.resetSettings.addEventListener("click", resetSettings);
+  dom.testPrint.addEventListener("click", function () { testPrint(false); });
+  dom.testPrintSave.addEventListener("click", function () { testPrint(true); });
 
+  dom.printAll.addEventListener("click", printAll);
   dom.saveAll.addEventListener("click", saveAll);
   dom.saveMerged.addEventListener("click", saveMerged);
   dom.clearAll.addEventListener("click", clearAll);
@@ -778,4 +892,4 @@ function init() {
 init();
 
 // Kleiner Haken für Tests und Automatisierung (z. B. Dateien per Skript hineingeben).
-window.LabelCropApp = { addFiles: addFiles, entries: entries, readSettings: readSettings };
+window.LabelCropApp = { addFiles: addFiles, entries: entries, readSettings: readSettings, printPdf: printPdf };

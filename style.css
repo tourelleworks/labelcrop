@@ -254,7 +254,81 @@ body.dragging .dropzone {
   color: var(--text-muted);
 }
 
-/* Fußzeile der Einstellungen: Speicherstatus links, Zurücksetzen rechts. */
+/* Zwei Schritte in den Einstellungen: Label-Typ (woher), Drucker-Profil (wohin). */
+.settings-block + .settings-block {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.settings-block h2 {
+  margin-bottom: 0.7rem;
+}
+
+.settings-block h2 .muted {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+/* Feineinstellungen eingeklappt; die Zusammenfassung in der Kopfzeile zeigt, was gilt. */
+.fine-tuning {
+  margin-top: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface-soft);
+}
+
+.fine-tuning summary {
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  list-style: revert;
+}
+
+.fine-tuning summary span {
+  color: var(--text-muted);
+}
+
+.fine-tuning[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.fine-tuning .settings-grid {
+  padding: 0.9rem;
+}
+
+.fine-tuning .hint {
+  padding: 0 0.9rem 0.9rem;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.result-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Unsichtbarer Rahmen, aus dem heraus gedruckt wird (display: none würde das Drucken verhindern). */
+.print-frame {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Fußzeile der Einstellungen: Speicherstatus links, Knöpfe rechts. */
 .settings-foot {
   display: flex;
   justify-content: space-between;

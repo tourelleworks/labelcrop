@@ -26,11 +26,15 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
 - **Drag & Drop** oder Dateiauswahl, mehrere PDFs gleichzeitig
 - **Label-Typ** erkennen (derzeit: Deutsche Post Internetmarke über eBay) oder
   Bereich von Hand angeben
-- **Zielformat** wählen: wie Ausschnitt (1:1), Brother-/DYMO-Etiketten,
-  100 × 150 mm Thermodrucker, A6 oder eigene Größe (auch Endlosrolle)
-- **Einpassen** oder Originalgröße, **automatisch drehen**, Rand einstellen
+- **Drucker-Profil:** Etikettenformat (100 × 150 mm Thermodrucker, Brother,
+  DYMO, A6, Endlosrolle, eigene Größe), Drehung 0/90/180/270° oder automatisch,
+  Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt
+- **Testdruck** zum Kalibrieren: Rahmen, Pfeil zum Seitenanfang, 50-mm-Linien
 - **Vorschau** des Ausschnitts im Original und des Ergebnisses
-- **Speichern** einzeln oder alle Labels in einer PDF
+- **Drucken** über den Browser-Druckdialog oder **speichern**, einzeln oder
+  alle Labels in einer PDF
+- **Direktdruck ohne Dialog:** [LabelCrop Desktop](desktop/README.md) (Java +
+  PDFBox) druckt direkt an den eingestellten Etikettendrucker
 - **PWA**: installierbar als Desktop-App, offline nutzbar, öffnet PDFs per
   „Öffnen mit“ (Chrome/Edge)
 - **Datenschutz**: alles läuft lokal im Browser, nichts verlässt das Gerät
@@ -52,6 +56,7 @@ eigenen Domain ausliefert.
 ├── manifest.json       # PWA-Manifest inkl. file_handlers für PDFs
 ├── service-worker.js   # Offline-Cache, automatische Updates
 ├── test/               # Node-Tests (layout.test.js) und Skript für echte Dateien
+├── desktop/            # LabelCrop Desktop: Java + PDFBox, Direktdruck ohne Dialog (eigene README)
 └── CNAME               # eigene Domain für GitHub Pages
 ```
 

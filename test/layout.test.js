@@ -151,6 +151,65 @@ test("Matrix bei 90°: Ecken des Bereichs landen innerhalb der Zielseite", () =>
   assertClose(topLeft[1], layout.pageHeight, 1e-6, "oben links → oben");
 });
 
+function mapCorners(box, layout) {
+  const m = layout.matrix;
+  function map(px, py) { return [m[0] * px + m[2] * py + m[4], m[1] * px + m[3] * py + m[5]]; }
+  return {
+    bottomLeft: map(box.left, box.bottom),
+    bottomRight: map(box.right, box.bottom),
+    topLeft: map(box.left, box.top),
+    topRight: map(box.right, box.top),
+  };
+}
+
+test("Feste Drehung 180°: Inhalt steht kopf, Seite bleibt 100 × 150", () => {
+  const box = LabelCrop.sourceBox(POST, A4);
+  const layout = LabelCrop.computeLayout(box, profiles.findTarget("thermo-100x150"), { margin: 0, rotate: "180" });
+  assert.equal(layout.rotation, 180);
+  assertClose(layout.scale, 100 / W, 1e-6, "Maßstab: Breite füllt das Etikett");
+  const c = mapCorners(box, layout);
+  // Die linke obere Ecke der Quelle landet rechts unten.
+  assertClose(c.topLeft[0], layout.x + layout.placedWidth, 1e-6, "oben links → rechts");
+  assertClose(c.topLeft[1], layout.y, 1e-6, "oben links → unten");
+  assertClose(c.bottomRight[0], layout.x, 1e-6, "unten rechts → links");
+  assertClose(c.bottomRight[1], layout.y + layout.placedHeight, 1e-6, "unten rechts → oben");
+});
+
+test("Feste Drehung 270°: gegen den Uhrzeigersinn, Seitenverhältnis getauscht", () => {
+  const box = LabelCrop.sourceBox(POST, A4);
+  const layout = LabelCrop.computeLayout(box, profiles.findTarget("brother-62-endless"), { margin: 0, rotate: "270" });
+  assert.equal(layout.rotation, 270);
+  assertClose(layout.scale, 62 / H, 1e-6, "Maßstab wie bei 90°");
+  const c = mapCorners(box, layout);
+  // Die linke obere Ecke der Quelle landet links unten, die rechte obere links oben.
+  assertClose(c.topLeft[0], 0, 1e-6, "oben links → links");
+  assertClose(c.topLeft[1], 0, 1e-6, "oben links → unten");
+  assertClose(c.topRight[0], 0, 1e-6, "oben rechts → links");
+  assertClose(c.topRight[1], layout.pageHeight, 1e-6, "oben rechts → oben");
+});
+
+test("Alte gespeicherte Werte 'none' und 'rotate' funktionieren weiter", () => {
+  const box = LabelCrop.sourceBox(POST, A4);
+  assert.equal(LabelCrop.computeLayout(box, profiles.findTarget("thermo-100x150"), { rotate: "none" }).rotation, 0);
+  assert.equal(LabelCrop.computeLayout(box, profiles.findTarget("thermo-100x150"), { rotate: "rotate" }).rotation, 90);
+});
+
+test("Lage 'oben bündig': Label beginnt am Etikettenanfang, Rand bleibt frei", () => {
+  const box = LabelCrop.sourceBox(POST, A4);
+  const layout = LabelCrop.computeLayout(box, profiles.findTarget("thermo-100x150"), { margin: 3, rotate: "0", scaleMode: "none", placement: "top" });
+  assertClose(mm(layout.y + layout.placedHeight), 150 - 3, 0.01, "Oberkante 3 mm unter dem Seitenrand");
+  assertClose(mm(layout.x), (100 - W) / 2, 0.01, "waagerecht zentriert");
+  // Zentriert zum Vergleich:
+  const centered = LabelCrop.computeLayout(box, profiles.findTarget("thermo-100x150"), { margin: 3, rotate: "0", scaleMode: "none", placement: "center" });
+  assertClose(mm(centered.y), (150 - H) / 2, 0.01, "zentriert");
+});
+
+test("Testdruck: Seitengröße folgt dem Zielformat, Endlos bekommt 100 mm Länge", () => {
+  assert.deepEqual(LabelCrop.testPrintPageSize(profiles.findTarget("thermo-100x150")), { widthMm: 100, heightMm: 150 });
+  assert.deepEqual(LabelCrop.testPrintPageSize(profiles.findTarget("brother-62-endless")), { widthMm: 62, heightMm: 100 });
+  assert.deepEqual(LabelCrop.testPrintPageSize(profiles.findTarget("source")), { widthMm: 100, heightMm: 150 });
+});
+
 test("Erkennung: Internetmarke an 'IM' plus Datum/Preis, nur bei A4, enges Profil zuerst", () => {
   // Erfundene Daten im Aufbau eines echten Labels: Absenderzeile, Frankier-ID, "IM" mit Datum und Preis, Empfänger.
   const text = "Erika Mustermann, Am Beispielweg 1, 12345 Musterstadt A0 1234 5678 00 0000 9ABC IM 09.09.26 1,80 MAX MUSTER";

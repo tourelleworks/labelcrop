@@ -22,3 +22,8 @@ npm-debug.log*
 # Umgebungs-/Geheimdaten
 .env
 *.local
+
+# Desktop-Variante (Java): Bibliothek wird von build.cmd geladen, Build-Ausgaben gehören nicht ins Repo.
+desktop/lib/
+desktop/out/
+desktop/*.jar

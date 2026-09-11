@@ -34,11 +34,7 @@
 
     <section class="card intro">
       <h1>Versandetikett aus A4-PDF ausschneiden</h1>
-      <p>
-        Die A4-Datei hineinziehen, Zielformat wählen, fertige Label-PDF speichern.
-        Das Ergebnis ist eine echte Seite in Etikettengröße – kein Anzeige-Trick,
-        den der Drucker ignorieren könnte.
-      </p>
+      <p>PDF hineinziehen, Etikettenformat wählen, drucken oder speichern. Die Datei bleibt auf diesem Gerät.</p>
     </section>
 
     <!-- Ablagefläche: Klick öffnet den Dateidialog, Ablegen geht überall auf der Seite. -->
@@ -51,69 +47,97 @@
     <p id="message" class="message" hidden></p>
 
     <section class="card settings">
-      <h2>Einstellungen</h2>
-      <form id="settings" class="settings-grid" autocomplete="off">
+      <form id="settings" autocomplete="off">
 
-        <label class="field">
-          <span>Label-Typ</span>
-          <select id="profile"></select>
-        </label>
-
-        <div id="custom-source" class="field-group" hidden>
-          <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
-          <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
-          <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
-          <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
-          <p class="hint">Maße des Ausschnitts, gemessen ab der linken oberen Ecke der Seite.</p>
+        <!-- Schritt 1: Woher kommt das Label? (Label-Profil aus dem Konzept) -->
+        <div class="settings-block">
+          <h2>Label-Typ <span class="muted">– woher</span></h2>
+          <div class="settings-grid">
+            <label class="field">
+              <span>Typ des Versandetiketts</span>
+              <select id="profile"></select>
+            </label>
+            <div id="custom-source" class="field-group" hidden>
+              <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
+              <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
+              <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
+              <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
+              <p class="hint">Maße des Ausschnitts ab der linken oberen Ecke der Seite.</p>
+            </div>
+          </div>
         </div>
 
-        <label class="field">
-          <span>Zielformat</span>
-          <select id="target"></select>
-        </label>
+        <!-- Schritt 2: Wohin soll es? (Drucker-Profil aus dem Konzept) -->
+        <div class="settings-block">
+          <h2>Drucker-Profil <span class="muted">– wohin</span></h2>
+          <div class="settings-grid">
+            <label class="field">
+              <span>Etikettenformat</span>
+              <select id="target"></select>
+            </label>
+            <div id="custom-target" class="field-group" hidden>
+              <label class="field"><span>Breite (mm)</span><input type="number" id="target-width" step="0.1" min="10" value="100"></label>
+              <label class="field"><span>Höhe (mm)</span><input type="number" id="target-height" step="0.1" min="0" value="50" placeholder="leer = Endlos"></label>
+              <p class="hint">Höhe leer lassen für Endlosrollen – sie ergibt sich aus dem Inhalt.</p>
+            </div>
+          </div>
 
-        <div id="custom-target" class="field-group" hidden>
-          <label class="field"><span>Breite (mm)</span><input type="number" id="target-width" step="0.1" min="10" value="100"></label>
-          <label class="field"><span>Höhe (mm)</span><input type="number" id="target-height" step="0.1" min="0" value="50" placeholder="leer = Endlos"></label>
-          <p class="hint">Höhe leer lassen für Endlosrollen – sie ergibt sich dann aus dem Inhalt.</p>
+          <!-- Selten gebraucht, deshalb eingeklappt; die Zusammenfassung zeigt trotzdem, was gilt. -->
+          <details class="fine-tuning" id="fine-tuning">
+            <summary>Feineinstellungen: <span id="profile-summary"></span></summary>
+            <div class="settings-grid">
+              <label class="field">
+                <span>Größe</span>
+                <select id="scale-mode">
+                  <option value="fit">Einpassen (auf Etikett skalieren)</option>
+                  <option value="none">100 % (Originalgröße)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Drehung</span>
+                <select id="rotate">
+                  <option value="auto">Automatisch</option>
+                  <option value="0">0° (nicht drehen)</option>
+                  <option value="90">90°</option>
+                  <option value="180">180°</option>
+                  <option value="270">270°</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Lage auf dem Etikett</span>
+                <select id="placement">
+                  <option value="center">Zentriert</option>
+                  <option value="top">Oben bündig</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Rand (mm)</span>
+                <input type="number" id="margin" step="0.5" min="0" value="0">
+              </label>
+            </div>
+            <p class="hint">Drehung und Lage einmal pro Drucker mit dem Testdruck ausprobieren – danach bleiben sie gespeichert.</p>
+          </details>
         </div>
-
-        <label class="field">
-          <span>Größe</span>
-          <select id="scale-mode">
-            <option value="fit">Einpassen (auf Zielformat skalieren)</option>
-            <option value="none">Originalgröße (1:1)</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Drehen</span>
-          <select id="rotate">
-            <option value="auto">Automatisch (passend zum Format)</option>
-            <option value="none">Nicht drehen</option>
-            <option value="rotate">90° drehen</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Rand (mm)</span>
-          <input type="number" id="margin" step="0.5" min="0" value="0">
-        </label>
 
       </form>
-      <!-- Einstellungen werden automatisch im Browser gemerkt (localStorage, nur dieses Gerät). -->
+
       <div class="settings-foot">
         <span id="settings-status" class="settings-status"></span>
-        <button type="button" class="btn link" id="reset-settings">Auf Vorgaben zurücksetzen</button>
+        <div class="settings-actions">
+          <button type="button" class="btn" id="test-print">Testdruck drucken</button>
+          <button type="button" class="btn link" id="test-print-save">Testdruck als PDF</button>
+          <button type="button" class="btn link" id="reset-settings">Zurücksetzen</button>
+        </div>
       </div>
     </section>
 
     <section class="results" id="results">
       <div class="results-bar" id="results-bar" hidden>
         <span class="count" id="result-count"></span>
-        <button type="button" class="btn primary" id="save-all">Alle speichern</button>
+        <button type="button" class="btn primary" id="print-all">Alle drucken</button>
+        <button type="button" class="btn" id="save-all">Alle speichern</button>
         <button type="button" class="btn" id="save-merged">Alle in einer PDF</button>
-        <button type="button" class="btn" id="clear-all">Liste leeren</button>
+        <button type="button" class="btn link" id="clear-all">Liste leeren</button>
       </div>
       <div id="result-list" class="result-list"></div>
     </section>
@@ -121,9 +145,9 @@
     <section class="card hints">
       <h2>Drucken</h2>
       <ul>
-        <li>Im Druckdialog <strong>„Tatsächliche Größe“</strong> bzw. 100 % wählen – nicht „An Seite anpassen“, sonst stimmt der Maßstab nicht.</li>
-        <li>Beim Etikettendrucker das passende Medium wählen (z. B. „62 mm Endlos“), damit die Seitengröße zum Etikett passt.</li>
-        <li>Text und Code bleiben als Vektoren erhalten – der Data-Matrix-Code wird nicht unscharf.</li>
+        <li><strong>Neuer Drucker?</strong> Erst „Testdruck drucken“: Rahmen, Pfeil und 50-mm-Linie zeigen, ob Papierformat, Drehung und Skalierung stimmen.</li>
+        <li><strong>Im Druckdialog</strong> des Browsers: Etikettendrucker wählen, Papierformat wie im Ergebnis angegeben, Größe „Tatsächliche Größe“ bzw. 100 % – nicht „An Seite anpassen“.</li>
+        <li><strong>Ganz ohne Druckdialog</strong> druckt LabelCrop Desktop (Java, Ordner <code>desktop/</code> im Repository) direkt an den eingestellten Etikettendrucker.</li>
       </ul>
     </section>
 
@@ -144,7 +168,10 @@
           <h3 class="result-name"></h3>
           <p class="result-meta"></p>
         </div>
-        <button type="button" class="btn primary result-save">Speichern</button>
+        <div class="result-actions">
+          <button type="button" class="btn primary result-print">Drucken</button>
+          <button type="button" class="btn result-save">Speichern</button>
+        </div>
       </header>
       <p class="result-status" hidden></p>
       <ul class="result-warnings" hidden></ul>
