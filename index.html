@@ -145,9 +145,9 @@
     <section class="card hints">
       <h2>Drucken</h2>
       <ul>
+        <li><strong>Im Druckdialog</strong> nur den Etikettendrucker als Ziel wählen. Das Papierformat setzt LabelCrop auf die Etikettengröße, sofern der Drucker dieses Format kennt – sonst das Etikett einmal im Druckertreiber als Papierformat anlegen. „Skalieren“ auf „Standard“ lassen. Der Browser merkt sich den zuletzt benutzten Drucker.</li>
         <li><strong>Neuer Drucker?</strong> Erst „Testdruck drucken“: Rahmen, Pfeil und 50-mm-Linie zeigen, ob Papierformat, Drehung und Skalierung stimmen.</li>
-        <li><strong>Im Druckdialog</strong> des Browsers: Etikettendrucker wählen, Papierformat wie im Ergebnis angegeben, Größe „Tatsächliche Größe“ bzw. 100 % – nicht „An Seite anpassen“.</li>
-        <li><strong>Ganz ohne Druckdialog</strong> druckt LabelCrop Desktop (Java, Ordner <code>desktop/</code> im Repository) direkt an den eingestellten Etikettendrucker.</li>
+        <li><strong>Ganz ohne Druckdialog:</strong> Chrome mit <code>--kiosk-printing</code> starten (Verknüpfung), dann geht jeder Druck sofort an den Windows-Standarddrucker. Oder LabelCrop Desktop (Java, Ordner <code>desktop/</code> im Repository) mit frei wählbarem Drucker.</li>
       </ul>
     </section>
 

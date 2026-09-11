@@ -31,8 +31,10 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
   Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt
 - **Testdruck** zum Kalibrieren: Rahmen, Pfeil zum Seitenanfang, 50-mm-Linien
 - **Vorschau** des Ausschnitts im Original und des Ergebnisses
-- **Drucken** über den Browser-Druckdialog oder **speichern**, einzeln oder
-  alle Labels in einer PDF
+- **Drucken** über den Browser-Druckdialog – das Papierformat ist dabei schon
+  die Etikettengröße (jede Seite wird mit 600 dpi gerastert und als HTML-Seite
+  mit `@page`-Größe gedruckt); oder **speichern**, einzeln oder alle Labels
+  in einer PDF. Ohne Dialog: Chrome mit `--kiosk-printing` starten
 - **Direktdruck ohne Dialog:** [LabelCrop Desktop](desktop/README.md) (Java +
   PDFBox) druckt direkt an den eingestellten Etikettendrucker
 - **PWA**: installierbar als Desktop-App, offline nutzbar, öffnet PDFs per

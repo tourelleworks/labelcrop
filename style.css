@@ -404,6 +404,13 @@ body.dragging .dropzone {
   color: var(--error-text);
 }
 
+/* Kurze Zwischenmeldung (z. B. „Druck wird vorbereitet“), ruhig statt gelb. */
+.message.info {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: var(--text-muted);
+}
+
 /* ---------- Ergebnisse ---------- */
 
 .results-bar {

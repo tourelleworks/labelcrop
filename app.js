@@ -23,6 +23,8 @@ const DEFAULT_MARGIN_MM = 2;    // Vorgabe bei festen Formaten: Drucker lassen d
 const RENDER_INTENT = "print";
 const SETTINGS_KEY = "labelcrop-settings";   // Schlüssel im localStorage dieses Browsers
 const PRINT_FRAME_LIFETIME_MS = 120000;      // so lange bleibt der unsichtbare Druck-Rahmen bestehen
+const PRINT_DPI = 600;                        // Rasterauflösung für den Druck (Etikettendrucker haben 203–300 dpi)
+const PRINT_MAX_PX = 4200;                    // Obergrenze je Seite, damit große Formate nicht zu viel Speicher brauchen
 
 // Welche Formularfelder gemerkt werden. Die Vorgaben stehen hier und nicht im
 // HTML, damit "Zurücksetzen" und der erste Start dieselben Werte liefern.
@@ -604,17 +606,108 @@ async function drawResultPreview(entry, generation) {
 // Drucken und speichern
 // ============================================================
 
-// Im Browser führt kein Weg am Druckdialog vorbei. Die PDF wird in einem
-// unsichtbaren Rahmen geladen und von dort gedruckt; so bekommt der Dialog
-// die richtige Seitengröße. Klappt das nicht (z. B. Safari), öffnet sich die
-// PDF in einem neuen Tab, wo Strg+P weiterhilft.
-function printPdf(bytes) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
+// Im Browser führt kein Weg am Druckdialog vorbei – aber man kann ihm das
+// Papierformat vorgeben. Druckt man eine PDF, nimmt Chrome das Standardpapier
+// des Druckers (A4) und legt das kleine Label oben links ab. Druckt man eine
+// HTML-Seite mit @page-Größe, übernimmt Chrome diese Größe als Papierformat,
+// sobald der Drucker das Format kennt. Deshalb wird jede Label-Seite mit
+// 600 dpi gerastert und als HTML-Seite in exakter Etikettengröße gedruckt;
+// der Data-Matrix-Code bleibt dabei für jeden Etikettendrucker scharf genug.
+async function renderPagesForPrint(bytes) {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes) }).promise;
+  try {
+    const pages = [];
+    for (let number = 1; number <= doc.numPages; number++) {
+      const page = await doc.getPage(number);
+      const base = page.getViewport({ scale: 1 });
+      let scale = PRINT_DPI / 72;
+      const longest = Math.max(base.width, base.height) * scale;
+      if (longest > PRINT_MAX_PX) { scale = scale * PRINT_MAX_PX / longest; }
+      const viewport = page.getViewport({ scale: scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: viewport, intent: RENDER_INTENT }).promise;
+      pages.push({
+        widthMm: LabelCrop.ptToMm(base.width),
+        heightMm: LabelCrop.ptToMm(base.height),
+        dataUrl: canvas.toDataURL("image/png"),
+      });
+    }
+    return pages;
+  } finally {
+    doc.destroy();
+  }
+}
+
+function mmText(value) {
+  return value.toFixed(2) + "mm";
+}
+
+// HTML-Druckvorlage: @page in Etikettengröße ohne Rand, je Seite ein Bild in
+// exakter Größe. Der Rahmen ist 0,2 mm niedriger als die Seite, damit
+// Rundungen keine leere Folgeseite erzeugen.
+function buildPrintHtml(pages) {
+  const first = pages[0];
+  let html = "<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"><title>LabelCrop</title><style>"
+    + "@page { size: " + mmText(first.widthMm) + " " + mmText(first.heightMm) + "; margin: 0; }"
+    + " html, body { margin: 0; padding: 0; background: #fff; }"
+    + " .page { display: block; overflow: hidden; break-after: page; page-break-after: always; }"
+    + " .page:last-child { break-after: auto; page-break-after: auto; }"
+    + " img { display: block; }"
+    + "</style></head><body>";
+  for (const page of pages) {
+    html += "<div class=\"page\" style=\"width:" + mmText(page.widthMm) + ";height:" + mmText(page.heightMm - 0.2) + "\">"
+      + "<img src=\"" + page.dataUrl + "\" alt=\"\" style=\"width:" + mmText(page.widthMm) + ";height:" + mmText(page.heightMm) + "\">"
+      + "</div>";
+  }
+  return html + "</body></html>";
+}
+
+function removeFrameLater(frame, url) {
+  // Der Druckdialog braucht den Rahmen noch eine Weile; danach aufräumen.
+  setTimeout(function () {
+    frame.remove();
+    if (url !== null) { URL.revokeObjectURL(url); }
+  }, PRINT_FRAME_LIFETIME_MS);
+}
+
+function createPrintFrame() {
   const frame = document.createElement("iframe");
   frame.className = "print-frame";
   frame.setAttribute("aria-hidden", "true");
   frame.title = "Druckvorlage";
+  return frame;
+}
+
+function printHtml(html) {
+  const frame = createPrintFrame();
+  frame.addEventListener("load", function () {
+    const win = frame.contentWindow;
+    // Erst drucken, wenn alle Bilder entschlüsselt sind – sonst druckt Chrome leere Seiten.
+    const images = Array.from(win.document.images);
+    const decoded = images.map(function (image) {
+      if (typeof image.decode === "function") { return image.decode().catch(function () { return null; }); }
+      return Promise.resolve(null);
+    });
+    Promise.all(decoded).then(function () {
+      win.focus();
+      win.print();
+      removeFrameLater(frame, null);
+    });
+  });
+  frame.srcdoc = html;
+  document.body.appendChild(frame);
+}
+
+// Rückfall (z. B. Safari): die PDF selbst in einem unsichtbaren Rahmen drucken.
+function printPdfDirect(bytes) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const frame = createPrintFrame();
   frame.addEventListener("load", function () {
     try {
       frame.contentWindow.focus();
@@ -623,14 +716,23 @@ function printPdf(bytes) {
       console.warn("Direktes Drucken nicht möglich, öffne die PDF stattdessen:", error);
       window.open(url, "_blank");
     }
-    // Der Druckdialog braucht den Rahmen noch eine Weile; danach aufräumen.
-    setTimeout(function () {
-      frame.remove();
-      URL.revokeObjectURL(url);
-    }, PRINT_FRAME_LIFETIME_MS);
+    removeFrameLater(frame, url);
   });
   frame.src = url;
   document.body.appendChild(frame);
+}
+
+async function printPdf(bytes) {
+  showMessage("Druck wird vorbereitet …", "info");
+  try {
+    const pages = await renderPagesForPrint(bytes);
+    printHtml(buildPrintHtml(pages));
+    hideMessage();
+  } catch (error) {
+    console.warn("Druckvorlage konnte nicht gebaut werden, drucke die PDF direkt:", error);
+    hideMessage();
+    printPdfDirect(bytes);
+  }
 }
 
 function downloadBytes(bytes, fileName) {
@@ -892,4 +994,11 @@ function init() {
 init();
 
 // Kleiner Haken für Tests und Automatisierung (z. B. Dateien per Skript hineingeben).
-window.LabelCropApp = { addFiles: addFiles, entries: entries, readSettings: readSettings, printPdf: printPdf };
+window.LabelCropApp = {
+  addFiles: addFiles,
+  entries: entries,
+  readSettings: readSettings,
+  printPdf: printPdf,
+  renderPagesForPrint: renderPagesForPrint,
+  buildPrintHtml: buildPrintHtml,
+};
