@@ -7,7 +7,7 @@
 // Repository (test/samples/ steht in .gitignore).
 //
 // Aufruf:
-//   node test/crop-sample.js "test/samples/eBay label 01-15158-57952.pdf"
+//   node test/crop-sample.js "test/samples/eBay label 01-12345-67890.pdf"
 //   node test/crop-sample.js <eingabe.pdf> [ausgabe.pdf] [ziel-id] [profil-id]
 //
 // ziel-id z. B. source, brother-62-endless, brother-62x100 (siehe profiles.js)

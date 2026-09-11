@@ -86,9 +86,10 @@ möglich – Textmuster zur Erkennung. Kein weiterer Code nötig.
 
 ## Deployment
 
-GitHub Pages, „Deploy from a branch“ (Branch `master`, Ordner `/ (root)`).
-`CNAME` bindet `labelcrop.tourelleworks.de`; dafür bei Cloudflare einen
-CNAME-Eintrag `labelcrop` auf `<github-user>.github.io` anlegen.
+Repository `cdrcltr/repo_labelcrop`, GitHub Pages mit „Deploy from a branch“
+(Branch `master`, Ordner `/ (root)`). `CNAME` bindet `labelcrop.tourelleworks.de`;
+dafür bei Cloudflare einen CNAME-Eintrag `labelcrop` auf `cdrcltr.github.io`
+anlegen (das Ziel ist immer `<github-benutzer>.github.io`, nicht der Repo-Name).
 
 Bei jedem Release hochzählen:
 

@@ -152,7 +152,8 @@ test("Matrix bei 90°: Ecken des Bereichs landen innerhalb der Zielseite", () =>
 });
 
 test("Erkennung: Internetmarke an 'IM' plus Datum/Preis, nur bei A4, enges Profil zuerst", () => {
-  const text = "tayfun demir, Am Beispielweg 1, 12345 Ort A0 0615 2C8F 00 0000 2A65 IM 09.09.26 1,80 MAX MUSTER";
+  // Erfundene Daten im Aufbau eines echten Labels: Absenderzeile, Frankier-ID, "IM" mit Datum und Preis, Empfänger.
+  const text = "Erika Mustermann, Am Beispielweg 1, 12345 Musterstadt A0 1234 5678 00 0000 9ABC IM 09.09.26 1,80 MAX MUSTER";
   assert.equal(LabelCrop.detectProfile(profiles.PROFILES, A4, text), POST);
   assert.equal(LabelCrop.detectProfile(profiles.PROFILES, A4, "irgendein Brief"), null);
   const letter = { x: 0, y: 0, width: 612, height: 792 };
@@ -160,7 +161,7 @@ test("Erkennung: Internetmarke an 'IM' plus Datum/Preis, nur bei A4, enges Profi
 });
 
 test("Ausgabename hängt _label an", () => {
-  assert.equal(LabelCrop.outputFileName("eBay label 01-15158-57952.pdf"), "eBay label 01-15158-57952_label.pdf");
+  assert.equal(LabelCrop.outputFileName("eBay label 01-12345-67890.pdf"), "eBay label 01-12345-67890_label.pdf");
   assert.equal(LabelCrop.outputFileName("label.PDF"), "label_label.pdf");
   assert.equal(LabelCrop.outputFileName("ohne-endung"), "ohne-endung_label.pdf");
 });
