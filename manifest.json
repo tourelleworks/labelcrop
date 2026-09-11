@@ -1,0 +1,21 @@
+{
+  "name": "LabelCrop",
+  "short_name": "LabelCrop",
+  "description": "Schneidet Versandetiketten aus A4-PDFs aus – druckfertig, lokal im Browser.",
+  "lang": "de",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#eef1f6",
+  "theme_color": "#0f1b33",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "file_handlers": [
+    {
+      "action": "index.html",
+      "accept": { "application/pdf": [".pdf"] }
+    }
+  ]
+}

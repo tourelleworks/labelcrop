@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- LabelCrop: Etikett zwischen vier Schnittmarken, Farben wie tourelleworks.de -->
+  <rect width="100" height="100" rx="18" fill="#0f1b33"/>
+  <path d="M22 26h9M22 26v9M78 26h-9M78 26v9M22 74h9M22 74v-9M78 74h-9M78 74v-9"
+        stroke="#f2e6b3" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <rect x="29" y="33" width="42" height="34" rx="3" fill="#f2e6b3"/>
+  <g fill="#0f1b33">
+    <rect x="34" y="40" width="18" height="3.5"/>
+    <rect x="34" y="47" width="14" height="3.5"/>
+    <rect x="34" y="54" width="16" height="3.5"/>
+    <rect x="57" y="40" width="9" height="9"/>
+  </g>
+  <g fill="#f2e6b3">
+    <rect x="59" y="42" width="2" height="2"/>
+    <rect x="63" y="42" width="2" height="2"/>
+    <rect x="61" y="44" width="2" height="2"/>
+    <rect x="59" y="46" width="2" height="2"/>
+    <rect x="63" y="46" width="2" height="2"/>
+  </g>
+</svg>

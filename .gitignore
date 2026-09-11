@@ -1,0 +1,24 @@
+# Betriebssystem
+.DS_Store
+Thumbs.db
+
+# Editor / lokale Werkzeuge
+.vscode/
+.idea/
+.obsidian/
+*.swp
+
+# Dokumentation bleibt lokal (Obsidian-Vault vault_labelcrop) und gehört nicht ins Repository.
+notizen/
+CLAUDE.md
+
+# Beispiel-PDFs enthalten echte Adressen – nur lokal für Tests.
+test/samples/
+
+# Node (nur für Tests, keine Abhängigkeiten nötig)
+node_modules/
+npm-debug.log*
+
+# Umgebungs-/Geheimdaten
+.env
+*.local
