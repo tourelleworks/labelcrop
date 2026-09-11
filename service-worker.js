@@ -2,7 +2,7 @@
 // offline (oder als installierte App ohne Netz) die zuletzt geladene aus dem
 // Cache. Gecacht werden nur die eigenen Dateien; PDFs des Nutzers berührt
 // der Service Worker nie (sie laufen über Blob-URLs, nicht über fetch).
-const CACHE_VERSION = "labelcrop-v1";   // bei jedem Release hochzählen
+const CACHE_VERSION = "labelcrop-v2";   // bei jedem Release hochzählen
 const FILES = [
   "index.html",
   "style.css",

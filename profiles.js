@@ -19,21 +19,39 @@ const LabelCropProfiles = (function () {
     {
       id: "post-internetmarke-ebay",
       name: "Deutsche Post Internetmarke (eBay)",
-      description: "A4 hochkant, Etikett links oben zwischen vier Passkreuzen.",
+      description: "A4 hochkant, Etikett links oben; Ausschnitt eng um den Inhalt (76,2 × 40,2 mm).",
       // Erwartete Seitengröße in mm. Weicht die Datei ab, zeigt die
       // Oberfläche einen Hinweis – dann passt vermutlich das Profil nicht.
       page: { width: 210, height: 297, tolerance: 2 },
-      // Rechteck zwischen den Mittelpunkten der vier Passkreuze, gemessen an
-      // einem echten Label vom September 2026: x 33,165 pt, y 82,36 pt von
-      // oben, 255,12 × 133,23 pt – das sind exakt 90 × 47 mm.
-      source: { x: 11.7, y: 29.05, width: 90, height: 47 },
-      // Die Passkreuze ragen 2,4 mm in das Rechteck hinein. 1 mm Beschnitt
-      // rundum lässt ihre Reste am Rand verschwinden; der Inhalt beginnt
-      // erst 3 mm innerhalb der Marken, es geht also nichts verloren.
-      trim: 1,
+      // Enger Ausschnitt um den Inhalt, gemessen an einem echten Label vom
+      // September 2026: Absenderzeile beginnt 2,3 mm rechts und 2,2 mm unter
+      // der Kante, der Data-Matrix-Code endet 4 mm vor der rechten Kante, die
+      // Adresse 3,6 mm über der unteren. Entspricht dem Referenz-Zuschnitt
+      // (36/85 pt, 216 × 114 pt). Der Bereich zwischen den Passkreuzen wäre
+      // 90 × 47 mm – siehe nächstes Profil; hier wären rechts 16 mm und unten
+      // 8 mm Leerraum, was auf dem Etikett nur Platz verschenkt.
+      source: { x: 12.7, y: 30.0, width: 76.2, height: 40.2 },
+      trim: 0,
       // Erkennung: "Deutsche Post" ist im PDF ein Logo (Pfad), kein Text.
       // Eine Internetmarke erkennt man stattdessen an "IM" plus Datum und
       // Preis in derselben Zeile ("IM 09.09.26 1,80"). Alle Muster müssen passen.
+      detect: {
+        textAll: [/\bIM\b/, /\d{2}\.\d{2}\.\d{2}\s+\d+,\d{2}/],
+      },
+    },
+    {
+      id: "post-internetmarke-ebay-marks",
+      name: "Deutsche Post Internetmarke (eBay) – Passkreuz-Bereich",
+      description: "Voller Bereich zwischen den vier Passkreuzen (90 × 47 mm), falls eine sehr lange Absenderzeile rechts abgeschnitten würde.",
+      page: { width: 210, height: 297, tolerance: 2 },
+      // Rechteck zwischen den Mittelpunkten der vier Passkreuze: x 33,165 pt,
+      // y 82,36 pt von oben, 255,12 × 133,23 pt – exakt 90 × 47 mm.
+      source: { x: 11.7, y: 29.05, width: 90, height: 47 },
+      // Die Passkreuze ragen 2,4 mm in das Rechteck hinein. 1 mm Beschnitt
+      // rundum lässt ihre Reste am Rand verschwinden.
+      trim: 1,
+      // Gleiche Erkennung wie oben; bei "Automatisch" gewinnt das erste
+      // passende Profil, also der enge Ausschnitt.
       detect: {
         textAll: [/\bIM\b/, /\d{2}\.\d{2}\.\d{2}\s+\d+,\d{2}/],
       },
@@ -43,7 +61,7 @@ const LabelCropProfiles = (function () {
       name: "Eigener Bereich …",
       description: "Bereich von Hand angeben (mm ab der linken oberen Ecke der Seite).",
       page: null,
-      source: { x: 11.7, y: 29.05, width: 90, height: 47 },
+      source: { x: 12.7, y: 30.0, width: 76.2, height: 40.2 },
       trim: 0,
       detect: null,
       custom: true,

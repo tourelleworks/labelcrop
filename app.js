@@ -7,7 +7,7 @@
 // denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.1";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.2";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -21,6 +21,23 @@ const DEFAULT_MARGIN_MM = 2;    // Vorgabe bei festen Formaten: Drucker lassen d
 // in einem Hintergrund-Tab pausieren – die Vorschau bliebe dann bei
 // "Wird verarbeitet" stehen. "print" zeichnet per setTimeout, also immer.
 const RENDER_INTENT = "print";
+const SETTINGS_KEY = "labelcrop-settings";   // Schlüssel im localStorage dieses Browsers
+
+// Welche Formularfelder gemerkt werden. Die Vorgaben stehen hier und nicht im
+// HTML, damit "Zurücksetzen" und der erste Start dieselben Werte liefern.
+const SETTINGS_DEFAULTS = {
+  profile: "auto",
+  sourceX: "12.7",
+  sourceY: "30.0",
+  sourceWidth: "76.2",
+  sourceHeight: "40.2",
+  target: "source",
+  targetWidth: "100",
+  targetHeight: "50",
+  scaleMode: "fit",
+  rotate: "auto",
+  margin: "0",
+};
 
 // --- Zustand ---
 const entries = [];        // eine geladene Datei je Eintrag, siehe createEntry()
@@ -54,9 +71,26 @@ const dom = {
   saveAll: byId("save-all"),
   saveMerged: byId("save-merged"),
   clearAll: byId("clear-all"),
+  resetSettings: byId("reset-settings"),
+  settingsStatus: byId("settings-status"),
   template: byId("result-template"),
   message: byId("message"),
   pwaStatus: byId("pwa-status"),
+};
+
+// Zuordnung Einstellungsname → Formularfeld; Reihenfolge ist egal.
+const SETTINGS_FIELDS = {
+  profile: dom.profile,
+  sourceX: dom.sourceX,
+  sourceY: dom.sourceY,
+  sourceWidth: dom.sourceWidth,
+  sourceHeight: dom.sourceHeight,
+  target: dom.target,
+  targetWidth: dom.targetWidth,
+  targetHeight: dom.targetHeight,
+  scaleMode: dom.scaleMode,
+  rotate: dom.rotate,
+  margin: dom.margin,
 };
 
 // ============================================================
@@ -158,6 +192,82 @@ function scheduleReprocess() {
     reprocessTimer = null;
     for (const entry of entries) { processEntry(entry); }
   }, 150);
+}
+
+// ============================================================
+// Einstellungen merken (localStorage, nur auf diesem Gerät)
+// ============================================================
+
+// Prüft, ob ein gespeicherter Wert für ein Auswahlfeld noch existiert –
+// ein Profil könnte in einer neuen Version umbenannt worden sein.
+function selectHasOption(select, value) {
+  for (const option of select.options) {
+    if (option.value === value) { return true; }
+  }
+  return false;
+}
+
+function applySettings(values) {
+  for (const key in SETTINGS_FIELDS) {
+    const field = SETTINGS_FIELDS[key];
+    let value = SETTINGS_DEFAULTS[key];
+    if (typeof values[key] === "string") { value = values[key]; }
+    if (field.tagName === "SELECT" && !selectHasOption(field, value)) {
+      value = SETTINGS_DEFAULTS[key];
+    }
+    field.value = value;
+  }
+  marginTouched = values.marginTouched === true;
+}
+
+function saveSettings() {
+  const values = { marginTouched: marginTouched };
+  for (const key in SETTINGS_FIELDS) {
+    values[key] = SETTINGS_FIELDS[key].value;
+  }
+  // localStorage kann fehlen oder gesperrt sein (privates Fenster, Speicher voll) –
+  // dann läuft die App einfach ohne Merken weiter.
+  try {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(values));
+    showSettingsStatus("Gespeichert – gilt beim nächsten Öffnen auf diesem Gerät.");
+  } catch (error) {
+    console.warn("Einstellungen konnten nicht gespeichert werden:", error);
+    showSettingsStatus("Konnte nicht gespeichert werden (Browser-Speicher gesperrt).");
+  }
+}
+
+function loadSettings() {
+  let values = {};
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (raw !== null) { values = JSON.parse(raw); }
+  } catch (error) {
+    console.warn("Gespeicherte Einstellungen unlesbar, Vorgaben werden verwendet:", error);
+    values = {};
+  }
+  if (values === null || typeof values !== "object") { values = {}; }
+  applySettings(values);
+  if (Object.keys(values).length > 0) {
+    showSettingsStatus("Gespeicherte Einstellungen geladen.");
+  } else {
+    showSettingsStatus("Änderungen werden automatisch auf diesem Gerät gemerkt.");
+  }
+}
+
+function resetSettings() {
+  try {
+    window.localStorage.removeItem(SETTINGS_KEY);
+  } catch (error) {
+    console.warn("Einstellungen konnten nicht gelöscht werden:", error);
+  }
+  applySettings({});
+  updateSettingsVisibility();
+  showSettingsStatus("Auf Vorgaben zurückgesetzt.");
+  scheduleReprocess();
+}
+
+function showSettingsStatus(text) {
+  dom.settingsStatus.textContent = text;
 }
 
 // ============================================================
@@ -611,7 +721,13 @@ function bindEvents() {
   dom.target.addEventListener("change", onTargetChanged);
   dom.margin.addEventListener("input", function () { marginTouched = true; });
   dom.form.addEventListener("input", scheduleReprocess);
+  // "input" feuert bei Tastatureingaben, "change" bei Auswahlfeldern – beides
+  // soll gemerkt werden. Erst nach onTargetChanged, damit der automatische
+  // Rand mitgespeichert wird.
+  dom.form.addEventListener("input", saveSettings);
+  dom.form.addEventListener("change", saveSettings);
   dom.form.addEventListener("submit", function (event) { event.preventDefault(); });
+  dom.resetSettings.addEventListener("click", resetSettings);
 
   dom.saveAll.addEventListener("click", saveAll);
   dom.saveMerged.addEventListener("click", saveMerged);
@@ -653,6 +769,7 @@ function init() {
   fillSelect(dom.profile, LabelCropProfiles.PROFILES, { id: AUTO_PROFILE_ID, name: "Automatisch erkennen" });
   fillSelect(dom.target, LabelCropProfiles.TARGETS, null);
   dom.pwaStatus.textContent = "v" + APP_VERSION;
+  loadSettings();   // erst wenn die Auswahlfelder gefüllt sind
   updateSettingsVisibility();
   bindEvents();
   registerPwa();

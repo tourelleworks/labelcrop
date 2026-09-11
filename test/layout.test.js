@@ -2,7 +2,7 @@
 // LabelCrop – test/layout.test.js
 //
 // Prüft die reine Geometrie in cropper.js ohne PDF: Quellbereich,
-// Zielformate, Einpassen, automatische Drehung, Matrix.
+// Zielformate, Einpassen, automatische Drehung, Matrix, Erkennung.
 //
 // Aufruf (Node ≥ 20, keine Abhängigkeiten):
 //   node --test test/layout.test.js
@@ -16,6 +16,11 @@ const LabelCrop = require("../cropper.js");
 
 const A4 = { x: 0, y: 0, width: 595.275, height: 841.889 };
 const POST = profiles.findProfile("post-internetmarke-ebay");
+const POST_MARKS = profiles.findProfile("post-internetmarke-ebay-marks");
+
+// Maße des engen Standard-Ausschnitts in mm (siehe profiles.js).
+const W = 76.2;
+const H = 40.2;
 
 function mm(pt) { return LabelCrop.ptToMm(pt); }
 
@@ -23,8 +28,18 @@ function assertClose(actual, expected, tolerance, message) {
   assert.ok(Math.abs(actual - expected) <= tolerance, message + ": " + actual + " statt " + expected);
 }
 
-test("Quellbereich des Post-Profils liegt zwischen den Passkreuzen, 1 mm eingerückt", () => {
+test("Standardprofil: enger Ausschnitt ab 36/85 pt, 216 × 114 pt (Referenz-Zuschnitt)", () => {
   const box = LabelCrop.sourceBox(POST, A4);
+  assertClose(box.left, 36, 0.05, "links");
+  assertClose(A4.height - box.top, 85.04, 0.05, "oben (von oben)");
+  assertClose(box.width, 216, 0.05, "Breite in pt");
+  assertClose(box.height, 113.95, 0.1, "Höhe in pt");
+  assertClose(mm(box.width), W, 0.01, "Breite in mm");
+  assertClose(mm(box.height), H, 0.01, "Höhe in mm");
+});
+
+test("Passkreuz-Profil: Bereich zwischen den Kreuzen, 1 mm eingerückt → 88 × 45 mm", () => {
+  const box = LabelCrop.sourceBox(POST_MARKS, A4);
   // Passkreuz-Mittelpunkte (gemessen): x 33,165 / 288,282 pt, y 82,36 / 215,59 pt von oben.
   assertClose(box.left, 33.165 + LabelCrop.mmToPt(1), 0.1, "links");
   assertClose(box.right, 288.282 - LabelCrop.mmToPt(1), 0.1, "rechts");
@@ -34,11 +49,18 @@ test("Quellbereich des Post-Profils liegt zwischen den Passkreuzen, 1 mm einger�
   assertClose(mm(box.height), 45, 0.01, "Höhe in mm");
 });
 
+test("Beide Post-Profile beginnen an derselben Ecke links oben", () => {
+  const tight = LabelCrop.sourceBox(POST, A4);
+  const marks = LabelCrop.sourceBox(POST_MARKS, A4);
+  assertClose(tight.left, marks.left, 0.1, "linke Kante");
+  assertClose(tight.top, marks.top, 0.3, "obere Kante");
+});
+
 test("Wie Ausschnitt: Seite genau so groß wie der Bereich, Maßstab 1:1", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("source"), { margin: 0 });
-  assertClose(mm(layout.pageWidth), 88, 0.01, "Seitenbreite");
-  assertClose(mm(layout.pageHeight), 45, 0.01, "Seitenhöhe");
+  assertClose(mm(layout.pageWidth), W, 0.01, "Seitenbreite");
+  assertClose(mm(layout.pageHeight), H, 0.01, "Seitenhöhe");
   assert.equal(layout.scale, 1);
   assert.equal(layout.rotation, 0);
   assert.equal(layout.fits, true);
@@ -51,19 +73,19 @@ test("Wie Ausschnitt: Seite genau so groß wie der Bereich, Maßstab 1:1", () =>
 test("Rand vergrößert bei 'Wie Ausschnitt' die Seite rundum", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("source"), { margin: 2 });
-  assertClose(mm(layout.pageWidth), 92, 0.01, "Seitenbreite");
-  assertClose(mm(layout.pageHeight), 49, 0.01, "Seitenhöhe");
+  assertClose(mm(layout.pageWidth), W + 4, 0.01, "Seitenbreite");
+  assertClose(mm(layout.pageHeight), H + 4, 0.01, "Seitenhöhe");
   assertClose(mm(layout.x), 2, 0.01, "Abstand links");
 });
 
 test("Endlosrolle 62 mm: automatisch drehen, weil das mehr Maßstab bringt", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("brother-62-endless"), { margin: 0 });
-  // Ungedreht: 62/88 = 0,70 · Gedreht: 62/45 = 1,38 → gedreht gewinnt.
+  // Ungedreht: 62/76,2 = 0,81 · Gedreht: 62/40,2 = 1,54 → gedreht gewinnt.
   assert.equal(layout.rotation, 90);
-  assertClose(layout.scale, 62 / 45, 1e-6, "Maßstab");
+  assertClose(layout.scale, 62 / H, 1e-6, "Maßstab");
   assertClose(mm(layout.pageWidth), 62, 0.01, "Seitenbreite = Rollenbreite");
-  assertClose(mm(layout.pageHeight), 88 * (62 / 45), 0.01, "Seitenhöhe aus dem Inhalt");
+  assertClose(mm(layout.pageHeight), W * (62 / H), 0.01, "Seitenhöhe aus dem Inhalt");
   assert.equal(layout.fits, true);
 });
 
@@ -71,20 +93,20 @@ test("Endlosrolle ohne Drehen: Breite 62, Höhe aus dem Inhalt", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("brother-62-endless"), { margin: 0, rotate: "none" });
   assert.equal(layout.rotation, 0);
-  assertClose(layout.scale, 62 / 88, 1e-6, "Maßstab");
-  assertClose(mm(layout.pageHeight), 45 * (62 / 88), 0.01, "Seitenhöhe");
+  assertClose(layout.scale, 62 / W, 1e-6, "Maßstab");
+  assertClose(mm(layout.pageHeight), H * (62 / W), 0.01, "Seitenhöhe");
 });
 
 test("Festes Format 62 × 100 mm: gedreht passt mehr hinein", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("brother-62x100"), { margin: 0 });
-  // Ungedreht: min(62/88, 100/45) = 0,70 · Gedreht: min(62/45, 100/88) = 1,14.
+  // Ungedreht: min(62/76,2, 100/40,2) = 0,81 · Gedreht: min(62/40,2, 100/76,2) = 1,31.
   assert.equal(layout.rotation, 90);
-  assertClose(layout.scale, 100 / 88, 1e-6, "Maßstab");
+  assertClose(layout.scale, 100 / W, 1e-6, "Maßstab");
   assertClose(mm(layout.pageWidth), 62, 0.01, "Seitenbreite");
   assertClose(mm(layout.pageHeight), 100, 0.01, "Seitenhöhe");
-  // Zentriert: der Inhalt ist 45·1,136 = 51,1 mm breit → 5,4 mm Luft je Seite.
-  assertClose(mm(layout.x), (62 - 45 * (100 / 88)) / 2, 0.01, "x zentriert");
+  // Zentriert: der Inhalt ist 40,2 · 1,312 = 52,8 mm breit → 4,6 mm Luft je Seite.
+  assertClose(mm(layout.x), (62 - H * (100 / W)) / 2, 0.01, "x zentriert");
   assertClose(mm(layout.y), 0, 0.01, "y bündig");
 });
 
@@ -94,8 +116,8 @@ test("Originalgröße (1:1) auf 100 × 150 mm: passt ungedreht, wird zentriert",
   assert.equal(layout.scale, 1);
   assert.equal(layout.rotation, 0);
   assert.equal(layout.fits, true);
-  assertClose(mm(layout.x), 6, 0.01, "x zentriert");
-  assertClose(mm(layout.y), 52.5, 0.01, "y zentriert");
+  assertClose(mm(layout.x), (100 - W) / 2, 0.01, "x zentriert");
+  assertClose(mm(layout.y), (150 - H) / 2, 0.01, "y zentriert");
 });
 
 test("Originalgröße auf zu kleinem Format meldet fits = false", () => {
@@ -107,8 +129,8 @@ test("Originalgröße auf zu kleinem Format meldet fits = false", () => {
 test("Rand wird beim Einpassen abgezogen", () => {
   const box = LabelCrop.sourceBox(POST, A4);
   const layout = LabelCrop.computeLayout(box, profiles.findTarget("brother-62-endless"), { margin: 2, rotate: "none" });
-  assertClose(layout.scale, 58 / 88, 1e-6, "Maßstab auf 58 mm nutzbare Breite");
-  assertClose(mm(layout.pageHeight), 45 * (58 / 88) + 4, 0.01, "Höhe = Inhalt + 2 × Rand");
+  assertClose(layout.scale, 58 / W, 1e-6, "Maßstab auf 58 mm nutzbare Breite");
+  assertClose(mm(layout.pageHeight), H * (58 / W) + 4, 0.01, "Höhe = Inhalt + 2 × Rand");
 });
 
 test("Matrix bei 90°: Ecken des Bereichs landen innerhalb der Zielseite", () => {
@@ -129,7 +151,7 @@ test("Matrix bei 90°: Ecken des Bereichs landen innerhalb der Zielseite", () =>
   assertClose(topLeft[1], layout.pageHeight, 1e-6, "oben links → oben");
 });
 
-test("Erkennung: Internetmarke an 'IM' plus Datum/Preis, nur bei A4", () => {
+test("Erkennung: Internetmarke an 'IM' plus Datum/Preis, nur bei A4, enges Profil zuerst", () => {
   const text = "tayfun demir, Am Beispielweg 1, 12345 Ort A0 0615 2C8F 00 0000 2A65 IM 09.09.26 1,80 MAX MUSTER";
   assert.equal(LabelCrop.detectProfile(profiles.PROFILES, A4, text), POST);
   assert.equal(LabelCrop.detectProfile(profiles.PROFILES, A4, "irgendein Brief"), null);

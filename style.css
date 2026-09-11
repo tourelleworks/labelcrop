@@ -254,6 +254,20 @@ body.dragging .dropzone {
   color: var(--text-muted);
 }
 
+/* Fußzeile der Einstellungen: Speicherstatus links, Zurücksetzen rechts. */
+.settings-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {

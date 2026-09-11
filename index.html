@@ -60,10 +60,10 @@
         </label>
 
         <div id="custom-source" class="field-group" hidden>
-          <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="11.7"></label>
-          <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="29.05"></label>
-          <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="90"></label>
-          <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="47"></label>
+          <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
+          <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
+          <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
+          <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
           <p class="hint">Maße des Ausschnitts, gemessen ab der linken oberen Ecke der Seite.</p>
         </div>
 
@@ -101,6 +101,11 @@
         </label>
 
       </form>
+      <!-- Einstellungen werden automatisch im Browser gemerkt (localStorage, nur dieses Gerät). -->
+      <div class="settings-foot">
+        <span id="settings-status" class="settings-status"></span>
+        <button type="button" class="btn link" id="reset-settings">Auf Vorgaben zurücksetzen</button>
+      </div>
     </section>
 
     <section class="results" id="results">
