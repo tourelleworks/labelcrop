@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.3";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.4";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -25,6 +25,8 @@ const SETTINGS_KEY = "labelcrop-settings";   // Schlüssel im localStorage diese
 const PRINT_FRAME_LIFETIME_MS = 120000;      // so lange bleibt der unsichtbare Druck-Rahmen bestehen
 const PRINT_DPI = 600;                        // Rasterauflösung für den Druck (Etikettendrucker haben 203–300 dpi)
 const PRINT_MAX_PX = 4200;                    // Obergrenze je Seite, damit große Formate nicht zu viel Speicher brauchen
+const CROP_MIN_MM = 5;                        // kleinster Ausschnitt im Editor
+const CROP_STAGE_MAX_PX = 560;                // Breite der Seitenansicht im Editor (CSS-Pixel)
 
 // Welche Formularfelder gemerkt werden. Die Vorgaben stehen hier und nicht im
 // HTML, damit "Zurücksetzen" und der erste Start dieselben Werte liefern.
@@ -71,6 +73,27 @@ const dom = {
   placement: byId("placement"),
   margin: byId("margin"),
   profileSummary: byId("profile-summary"),
+  deleteProfile: byId("delete-profile"),
+  saveProfile: byId("save-profile"),
+  profileName: byId("profile-name"),
+  deleteTarget: byId("delete-target"),
+  saveTarget: byId("save-target"),
+  targetName: byId("target-name"),
+  cropEditor: byId("crop-editor"),
+  cropTitle: byId("crop-title"),
+  cropHint: byId("crop-hint"),
+  cropStage: byId("crop-stage"),
+  cropCanvas: byId("crop-canvas"),
+  cropRect: byId("crop-rect"),
+  cropX: byId("crop-x"),
+  cropY: byId("crop-y"),
+  cropW: byId("crop-w"),
+  cropH: byId("crop-h"),
+  cropName: byId("crop-name"),
+  cropInfo: byId("crop-info"),
+  cropCancel: byId("crop-cancel"),
+  cropApply: byId("crop-apply"),
+  cropSave: byId("crop-save"),
   resultsBar: byId("results-bar"),
   resultList: byId("result-list"),
   resultCount: byId("result-count"),
@@ -107,18 +130,65 @@ const SETTINGS_FIELDS = {
 // Einstellungen
 // ============================================================
 
-function fillSelect(select, items, firstOption) {
-  if (firstOption !== null) {
-    const option = document.createElement("option");
-    option.value = firstOption.id;
-    option.textContent = firstOption.name;
-    select.appendChild(option);
+function optionFor(id, text) {
+  const option = document.createElement("option");
+  option.value = id;
+  option.textContent = text;
+  return option;
+}
+
+function describeTargetSize(target) {
+  if (typeof target.width !== "number") { return ""; }
+  if (typeof target.height !== "number") { return " (" + formatMm(target.width) + " mm Endlos)"; }
+  return " (" + formatMm(target.width) + " × " + formatMm(target.height) + " mm)";
+}
+
+// Auswahlfelder neu aufbauen: eingebaute Einträge, dann die eigenen als Gruppe,
+// zuletzt "Eigener Bereich" bzw. "Eigene Größe". Wird nach Speichern/Löschen wiederholt.
+function fillProfileSelect(selectedId) {
+  const select = dom.profile;
+  select.textContent = "";
+  select.appendChild(optionFor(AUTO_PROFILE_ID, "Automatisch erkennen"));
+  for (const profile of LabelCropProfiles.PROFILES) {
+    select.appendChild(optionFor(profile.id, profile.name));
   }
-  for (const item of items) {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.name;
-    select.appendChild(option);
+  const own = LabelCropProfiles.userProfiles();
+  if (own.length > 0) {
+    const group = document.createElement("optgroup");
+    group.label = "Eigene Label-Typen";
+    for (const profile of own) {
+      group.appendChild(optionFor(profile.id, profile.name + " (" + formatMm(profile.source.width) + " × " + formatMm(profile.source.height) + " mm)"));
+    }
+    select.appendChild(group);
+  }
+  select.appendChild(optionFor("custom", "Eigener Bereich …"));
+  if (selectHasOption(select, selectedId)) {
+    select.value = selectedId;
+  } else {
+    select.value = AUTO_PROFILE_ID;
+  }
+}
+
+function fillTargetSelect(selectedId) {
+  const select = dom.target;
+  select.textContent = "";
+  for (const target of LabelCropProfiles.TARGETS) {
+    select.appendChild(optionFor(target.id, target.name));
+  }
+  const own = LabelCropProfiles.userTargets();
+  if (own.length > 0) {
+    const group = document.createElement("optgroup");
+    group.label = "Eigene Formate";
+    for (const target of own) {
+      group.appendChild(optionFor(target.id, target.name + describeTargetSize(target)));
+    }
+    select.appendChild(group);
+  }
+  select.appendChild(optionFor("custom", "Eigene Größe …"));
+  if (selectHasOption(select, selectedId)) {
+    select.value = selectedId;
+  } else {
+    select.value = "source";
   }
 }
 
@@ -178,8 +248,10 @@ function isSourceSizeTarget() {
 function updateSettingsVisibility() {
   const profile = LabelCropProfiles.findProfile(dom.profile.value);
   dom.customSource.hidden = !(profile !== null && profile.custom);
+  dom.deleteProfile.hidden = !LabelCropProfiles.isUserDefined(profile);
   const target = LabelCropProfiles.findTarget(dom.target.value);
   dom.customTarget.hidden = !(target !== null && target.custom);
+  dom.deleteTarget.hidden = !LabelCropProfiles.isUserDefined(target);
   // Bei "Wie Ausschnitt" gibt es nichts einzupassen und nichts zu platzieren.
   dom.scaleMode.disabled = isSourceSizeTarget();
   dom.placement.disabled = isSourceSizeTarget();
@@ -305,6 +377,315 @@ function showSettingsStatus(text) {
 }
 
 // ============================================================
+// Eigene Label-Typen und Formate: speichern und löschen
+// ============================================================
+
+// Seitengröße der ersten geladenen Datei – damit ein eigener Typ später bei
+// "Automatisch erkennen" für Dateien dieser Größe vorgeschlagen wird.
+function pageSizeOfFirstEntry() {
+  for (const entry of entries) {
+    if (entry.mediaBox !== null) {
+      return { width: round1(LabelCrop.ptToMm(entry.mediaBox.width)), height: round1(LabelCrop.ptToMm(entry.mediaBox.height)) };
+    }
+  }
+  return null;
+}
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function afterProfileListChanged(selectedId, statusText) {
+  fillProfileSelect(selectedId);
+  updateSettingsVisibility();
+  saveSettings();
+  scheduleReprocess();
+  showSettingsStatus(statusText);
+}
+
+function afterTargetListChanged(selectedId, statusText) {
+  fillTargetSelect(selectedId);
+  onTargetChanged();
+  saveSettings();
+  showSettingsStatus(statusText);
+}
+
+function saveProfileFromFields() {
+  const name = dom.profileName.value.trim();
+  if (name === "") {
+    dom.profileName.focus();
+    showSettingsStatus("Bitte einen Namen für den Label-Typ eingeben.");
+    return;
+  }
+  const settings = readSettings();   // liefert bei "Eigener Bereich" die getippten Maße
+  try {
+    const profile = LabelCropProfiles.addProfile({ name: name, source: settings.profile.source, page: pageSizeOfFirstEntry() });
+    dom.profileName.value = "";
+    afterProfileListChanged(profile.id, "Label-Typ „" + name + "“ gespeichert.");
+  } catch (error) {
+    showSettingsStatus(error.message);
+  }
+}
+
+function deleteSelectedProfile() {
+  const profile = LabelCropProfiles.findProfile(dom.profile.value);
+  if (!LabelCropProfiles.isUserDefined(profile)) { return; }
+  if (!window.confirm("Label-Typ „" + profile.name + "“ löschen?")) { return; }
+  LabelCropProfiles.removeProfile(profile.id);
+  afterProfileListChanged(AUTO_PROFILE_ID, "Label-Typ „" + profile.name + "“ gelöscht.");
+}
+
+function saveTargetFromFields() {
+  const name = dom.targetName.value.trim();
+  if (name === "") {
+    dom.targetName.focus();
+    showSettingsStatus("Bitte einen Namen für das Format eingeben.");
+    return;
+  }
+  const settings = readSettings();   // liefert bei "Eigene Größe" Breite und Höhe (null = Endlos)
+  try {
+    const target = LabelCropProfiles.addTarget({ name: name, width: settings.target.width, height: settings.target.height });
+    dom.targetName.value = "";
+    afterTargetListChanged(target.id, "Format „" + name + "“ gespeichert.");
+  } catch (error) {
+    showSettingsStatus(error.message);
+  }
+}
+
+function deleteSelectedTarget() {
+  const target = LabelCropProfiles.findTarget(dom.target.value);
+  if (!LabelCropProfiles.isUserDefined(target)) { return; }
+  if (!window.confirm("Format „" + target.name + "“ löschen?")) { return; }
+  LabelCropProfiles.removeTarget(target.id);
+  afterTargetListChanged("source", "Format „" + target.name + "“ gelöscht.");
+}
+
+// ============================================================
+// Ausschnitt-Editor: Rahmen auf der ganzen Seite ziehen und als
+// eigenen Label-Typ speichern (oder nur für diese Sitzung verwenden)
+// ============================================================
+
+const cropEdit = {
+  entry: null,
+  pageWidthMm: 0,
+  pageHeightMm: 0,
+  pxPerMm: 1,
+  rect: null,        // { x, y, width, height } in mm ab der linken oberen Ecke
+  drag: null,        // laufende Zeigeraktion: { mode, handle, start, startRect }
+  renderTask: null,
+};
+
+function clamp(value, min, max) {
+  if (value < min) { return min; }
+  if (value > max) { return max; }
+  return value;
+}
+
+// Aktueller Ausschnitt eines Eintrags in mm ab links oben – Startwert für den Editor.
+function currentRectMm(entry) {
+  const resolved = resolveProfile(entry, readSettings());
+  const box = LabelCrop.sourceBox(resolved.profile, entry.mediaBox);
+  const media = entry.mediaBox;
+  return {
+    x: LabelCrop.ptToMm(box.left - media.x),
+    y: LabelCrop.ptToMm(media.y + media.height - box.top),
+    width: LabelCrop.ptToMm(box.width),
+    height: LabelCrop.ptToMm(box.height),
+  };
+}
+
+async function openCropEditor(entry) {
+  if (entry.page === null || entry.mediaBox === null) { return; }
+  cropEdit.entry = entry;
+  cropEdit.drag = null;
+  const media = entry.mediaBox;
+  cropEdit.pageWidthMm = LabelCrop.ptToMm(media.width);
+  cropEdit.pageHeightMm = LabelCrop.ptToMm(media.height);
+  const stageWidth = Math.min(CROP_STAGE_MAX_PX, Math.max(240, window.innerWidth - 80));
+  cropEdit.pxPerMm = stageWidth / cropEdit.pageWidthMm;
+  const stageHeight = cropEdit.pageHeightMm * cropEdit.pxPerMm;
+  dom.cropStage.style.width = Math.round(stageWidth) + "px";
+  dom.cropStage.style.height = Math.round(stageHeight) + "px";
+  dom.cropName.value = "";
+  dom.cropTitle.textContent = "Ausschnitt festlegen – " + entry.name;
+  setCropRect(currentRectMm(entry));
+  dom.cropEditor.showModal();
+  await drawCropPage(entry, stageWidth, stageHeight);
+}
+
+async function drawCropPage(entry, stageWidth, stageHeight) {
+  const scale = cropEdit.pxPerMm / LabelCrop.mmToPt(1);   // pdf.js rechnet in Pixel je pt
+  const media = entry.mediaBox;
+  // Wie in der Vorschau: die linke obere Ecke der MediaBox auf (0, 0) legen.
+  const base = entry.page.getViewport({ scale: scale });
+  const origin = base.convertToViewportPoint(media.x, media.y + media.height);
+  const viewport = entry.page.getViewport({ scale: scale, offsetX: -origin[0], offsetY: -origin[1] });
+  if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
+  const prepared = prepareCanvas(dom.cropCanvas, stageWidth, stageHeight);
+  dom.cropCanvas.style.height = Math.round(stageHeight) + "px";
+  const task = entry.page.render({ canvasContext: prepared.ctx, viewport: viewport, transform: [prepared.dpr, 0, 0, prepared.dpr, 0, 0], intent: RENDER_INTENT });
+  cropEdit.renderTask = task;
+  try {
+    await task.promise;
+  } catch (error) {
+    if (!isRenderCancelled(error)) { console.error(error); }
+  } finally {
+    if (cropEdit.renderTask === task) { cropEdit.renderTask = null; }
+  }
+}
+
+function closeCropEditor() {
+  if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
+  cropEdit.entry = null;
+  cropEdit.drag = null;
+  if (dom.cropEditor.open) { dom.cropEditor.close(); }
+}
+
+function setFieldUnlessFocused(input, value) {
+  if (document.activeElement !== input) { input.value = value; }
+}
+
+// Rahmen setzen: auf die Seite begrenzen, Mindestgröße einhalten, Felder und Anzeige nachziehen.
+function setCropRect(rect) {
+  const pageW = cropEdit.pageWidthMm;
+  const pageH = cropEdit.pageHeightMm;
+  const width = clamp(rect.width, Math.min(CROP_MIN_MM, pageW), pageW);
+  const height = clamp(rect.height, Math.min(CROP_MIN_MM, pageH), pageH);
+  const x = clamp(rect.x, 0, pageW - width);
+  const y = clamp(rect.y, 0, pageH - height);
+  cropEdit.rect = { x: x, y: y, width: width, height: height };
+  const k = cropEdit.pxPerMm;
+  dom.cropRect.style.left = (x * k) + "px";
+  dom.cropRect.style.top = (y * k) + "px";
+  dom.cropRect.style.width = (width * k) + "px";
+  dom.cropRect.style.height = (height * k) + "px";
+  setFieldUnlessFocused(dom.cropX, x.toFixed(1));
+  setFieldUnlessFocused(dom.cropY, y.toFixed(1));
+  setFieldUnlessFocused(dom.cropW, width.toFixed(1));
+  setFieldUnlessFocused(dom.cropH, height.toFixed(1));
+  dom.cropInfo.textContent = formatMm(width) + " × " + formatMm(height) + " mm";
+}
+
+function cropPointerMm(event) {
+  const bounds = dom.cropCanvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - bounds.left) / cropEdit.pxPerMm,
+    y: (event.clientY - bounds.top) / cropEdit.pxPerMm,
+  };
+}
+
+function onCropPointerDown(event) {
+  if (cropEdit.rect === null) { return; }
+  if (event.pointerType === "mouse" && event.button !== 0) { return; }
+  const point = cropPointerMm(event);
+  let mode = "draw";
+  let handle = "";
+  if (event.target.dataset && event.target.dataset.handle) {
+    mode = "resize";
+    handle = event.target.dataset.handle;
+  } else if (event.target === dom.cropRect) {
+    mode = "move";
+  }
+  let startRect = cropEdit.rect;
+  if (mode === "draw") {
+    // Auf der Seite ziehen: neuen Rahmen ab diesem Punkt aufziehen.
+    startRect = { x: clamp(point.x, 0, cropEdit.pageWidthMm), y: clamp(point.y, 0, cropEdit.pageHeightMm), width: 0, height: 0 };
+  }
+  cropEdit.drag = { mode: mode, handle: handle, start: point, startRect: startRect };
+  // Zeiger festhalten, damit die Bewegung auch außerhalb der Bühne ankommt.
+  try { dom.cropStage.setPointerCapture(event.pointerId); } catch (error) { /* ohne Capture geht es auch */ }
+  event.preventDefault();
+}
+
+function onCropPointerMove(event) {
+  const drag = cropEdit.drag;
+  if (drag === null) { return; }
+  const point = cropPointerMm(event);
+  const dx = point.x - drag.start.x;
+  const dy = point.y - drag.start.y;
+  const r = drag.startRect;
+  if (drag.mode === "move") {
+    setCropRect({ x: r.x + dx, y: r.y + dy, width: r.width, height: r.height });
+    return;
+  }
+  if (drag.mode === "draw") {
+    // Rechteck zwischen Startpunkt und Zeiger – in jede Richtung ziehbar.
+    const px = clamp(point.x, 0, cropEdit.pageWidthMm);
+    const py = clamp(point.y, 0, cropEdit.pageHeightMm);
+    setCropRect({ x: Math.min(r.x, px), y: Math.min(r.y, py), width: Math.abs(px - r.x), height: Math.abs(py - r.y) });
+    return;
+  }
+  // Ecke ziehen: die gegenüberliegende Ecke bleibt stehen.
+  let left = r.x;
+  let top = r.y;
+  let right = r.x + r.width;
+  let bottom = r.y + r.height;
+  if (drag.handle.indexOf("w") >= 0) { left = r.x + dx; }
+  if (drag.handle.indexOf("e") >= 0) { right = r.x + r.width + dx; }
+  if (drag.handle.indexOf("n") >= 0) { top = r.y + dy; }
+  if (drag.handle.indexOf("s") >= 0) { bottom = r.y + r.height + dy; }
+  setCropRect({ x: Math.min(left, right), y: Math.min(top, bottom), width: Math.abs(right - left), height: Math.abs(bottom - top) });
+}
+
+function onCropPointerUp(event) {
+  if (cropEdit.drag === null) { return; }
+  cropEdit.drag = null;
+  try {
+    if (dom.cropStage.hasPointerCapture(event.pointerId)) {
+      dom.cropStage.releasePointerCapture(event.pointerId);
+    }
+  } catch (error) { /* nichts festgehalten */ }
+}
+
+function onCropFieldInput() {
+  if (cropEdit.rect === null) { return; }
+  setCropRect({
+    x: numberValue(dom.cropX, 0),
+    y: numberValue(dom.cropY, 0),
+    width: numberValue(dom.cropW, CROP_MIN_MM),
+    height: numberValue(dom.cropH, CROP_MIN_MM),
+  });
+}
+
+// "Nur jetzt verwenden": als "Eigener Bereich" übernehmen, ohne einen Typ anzulegen.
+function applyCropForNow() {
+  const r = cropEdit.rect;
+  if (r === null) { return; }
+  closeCropEditor();
+  dom.profile.value = "custom";
+  dom.sourceX.value = r.x.toFixed(1);
+  dom.sourceY.value = r.y.toFixed(1);
+  dom.sourceWidth.value = r.width.toFixed(1);
+  dom.sourceHeight.value = r.height.toFixed(1);
+  updateSettingsVisibility();
+  saveSettings();
+  scheduleReprocess();
+  showSettingsStatus("Eigener Bereich übernommen – zum Behalten unten als Label-Typ speichern.");
+}
+
+function saveCropAsProfile() {
+  const r = cropEdit.rect;
+  if (r === null) { return; }
+  const name = dom.cropName.value.trim();
+  if (name === "") {
+    dom.cropName.focus();
+    dom.cropHint.textContent = "Bitte einen Namen eingeben, z. B. „DHL Paketmarke“ – dann erscheint der Typ in der Auswahl.";
+    return;
+  }
+  try {
+    const profile = LabelCropProfiles.addProfile({
+      name: name,
+      source: { x: round1(r.x), y: round1(r.y), width: round1(r.width), height: round1(r.height) },
+      page: { width: round1(cropEdit.pageWidthMm), height: round1(cropEdit.pageHeightMm) },
+    });
+    closeCropEditor();
+    afterProfileListChanged(profile.id, "Label-Typ „" + name + "“ gespeichert – gilt jetzt für alle Dateien.");
+  } catch (error) {
+    dom.cropHint.textContent = error.message;
+  }
+}
+
+// ============================================================
 // Dateien laden
 // ============================================================
 
@@ -370,6 +751,7 @@ function createEntry(name) {
   element.querySelector(".result-name").textContent = name;
   element.querySelector(".result-print").addEventListener("click", function () { printEntry(entry); });
   element.querySelector(".result-save").addEventListener("click", function () { saveEntry(entry); });
+  element.querySelector(".result-adjust").addEventListener("click", function () { openCropEditor(entry); });
   element.querySelector(".result-remove").addEventListener("click", function () { removeEntry(entry); });
   return entry;
 }
@@ -393,7 +775,35 @@ async function loadSource(entry) {
     if (item.str) { parts.push(item.str); }
   }
   entry.text = parts.join(" ");
-  entry.detected = LabelCrop.detectProfile(LabelCropProfiles.PROFILES, entry.mediaBox, entry.text);
+  // Eingebaute Profile zuerst, dann eigene Typen (nur über die Seitengröße).
+  entry.detected = LabelCrop.detectProfile(LabelCropProfiles.allProfiles(), entry.mediaBox, entry.text);
+}
+
+// Welches Profil gilt für diesen Eintrag? Das gewählte, sonst das erkannte,
+// sonst das erste eingebaute – mit Hinweisen für die Karte.
+function resolveProfile(entry, settings) {
+  const warnings = [];
+  let profile = settings.profile;
+  let note = "";
+  if (profile === null) {
+    if (entry.detected !== null) {
+      profile = entry.detected;
+      note = "erkannt: " + profile.name;
+    } else {
+      profile = LabelCropProfiles.PROFILES[0];
+      note = "nicht erkannt, angenommen: " + profile.name;
+      warnings.push("Das Label wurde nicht als bekannter Typ erkannt. Bitte in der Vorschau prüfen – mit „Ausschnitt anpassen“ lässt sich der Bereich selbst festlegen und speichern.");
+    }
+  } else {
+    note = "Profil: " + profile.name;
+    if (!LabelCrop.pageSizeMatches(profile, entry.mediaBox)) {
+      warnings.push("Die Seitengröße passt nicht zum Profil – der Ausschnitt sitzt womöglich falsch.");
+    }
+  }
+  if (entry.rotation !== 0) {
+    warnings.push("Die Quellseite ist um " + entry.rotation + "° gedreht; die Profil-Koordinaten könnten nicht passen.");
+  }
+  return { profile: profile, note: note, warnings: warnings };
 }
 
 // ============================================================
@@ -405,28 +815,10 @@ async function processEntry(entry) {
   entry.generation += 1;
   const generation = entry.generation;
   const settings = readSettings();
-  const warnings = [];
-
-  let profile = settings.profile;
-  let profileNote = "";
-  if (profile === null) {
-    if (entry.detected !== null) {
-      profile = entry.detected;
-      profileNote = "erkannt: " + profile.name;
-    } else {
-      profile = LabelCropProfiles.PROFILES[0];
-      profileNote = "nicht erkannt, angenommen: " + profile.name;
-      warnings.push("Das Label wurde nicht als bekannter Typ erkannt. Bitte in der Vorschau prüfen, ob der Ausschnitt stimmt.");
-    }
-  } else {
-    profileNote = "Profil: " + profile.name;
-    if (!LabelCrop.pageSizeMatches(profile, entry.mediaBox)) {
-      warnings.push("Die Seitengröße passt nicht zum Profil – der Ausschnitt sitzt womöglich falsch.");
-    }
-  }
-  if (entry.rotation !== 0) {
-    warnings.push("Die Quellseite ist um " + entry.rotation + "° gedreht; die Profil-Koordinaten könnten nicht passen.");
-  }
+  const resolved = resolveProfile(entry, settings);
+  const profile = resolved.profile;
+  const profileNote = resolved.note;
+  const warnings = resolved.warnings;
 
   setEntryStatus(entry, "Wird verarbeitet …");
   try {
@@ -944,6 +1336,39 @@ function bindEvents() {
   dom.testPrint.addEventListener("click", function () { testPrint(false); });
   dom.testPrintSave.addEventListener("click", function () { testPrint(true); });
 
+  // Eigene Label-Typen und Formate
+  dom.saveProfile.addEventListener("click", saveProfileFromFields);
+  dom.deleteProfile.addEventListener("click", deleteSelectedProfile);
+  dom.saveTarget.addEventListener("click", saveTargetFromFields);
+  dom.deleteTarget.addEventListener("click", deleteSelectedTarget);
+  // Enter im Namensfeld speichert, statt das Formular abzuschicken.
+  dom.profileName.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { event.preventDefault(); saveProfileFromFields(); }
+  });
+  dom.targetName.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { event.preventDefault(); saveTargetFromFields(); }
+  });
+
+  // Ausschnitt-Editor
+  dom.cropStage.addEventListener("pointerdown", onCropPointerDown);
+  dom.cropStage.addEventListener("pointermove", onCropPointerMove);
+  dom.cropStage.addEventListener("pointerup", onCropPointerUp);
+  dom.cropStage.addEventListener("pointercancel", onCropPointerUp);
+  for (const input of [dom.cropX, dom.cropY, dom.cropW, dom.cropH]) {
+    input.addEventListener("input", onCropFieldInput);
+  }
+  dom.cropName.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { event.preventDefault(); saveCropAsProfile(); }
+  });
+  dom.cropCancel.addEventListener("click", closeCropEditor);
+  dom.cropApply.addEventListener("click", applyCropForNow);
+  dom.cropSave.addEventListener("click", saveCropAsProfile);
+  dom.cropEditor.addEventListener("close", function () {
+    if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
+    cropEdit.entry = null;
+    cropEdit.drag = null;
+  });
+
   dom.printAll.addEventListener("click", printAll);
   dom.saveAll.addEventListener("click", saveAll);
   dom.saveMerged.addEventListener("click", saveMerged);
@@ -982,8 +1407,13 @@ function registerPwa() {
 // ============================================================
 
 function init() {
-  fillSelect(dom.profile, LabelCropProfiles.PROFILES, { id: AUTO_PROFILE_ID, name: "Automatisch erkennen" });
-  fillSelect(dom.target, LabelCropProfiles.TARGETS, null);
+  // Eigene Label-Typen und Formate liegen im localStorage; ohne Speicher
+  // (privates Fenster) gibt es nur die eingebauten Einträge.
+  let storage = null;
+  try { storage = window.localStorage; } catch (error) { console.warn("Kein Browser-Speicher:", error); }
+  LabelCropProfiles.load(storage);
+  fillProfileSelect(AUTO_PROFILE_ID);
+  fillTargetSelect("source");
   dom.pwaStatus.textContent = "v" + APP_VERSION;
   loadSettings();   // erst wenn die Auswahlfelder gefüllt sind
   updateSettingsVisibility();
@@ -1001,4 +1431,7 @@ window.LabelCropApp = {
   printPdf: printPdf,
   renderPagesForPrint: renderPagesForPrint,
   buildPrintHtml: buildPrintHtml,
+  openCropEditor: openCropEditor,
+  setCropRect: setCropRect,
+  cropEdit: cropEdit,
 };

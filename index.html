@@ -57,12 +57,18 @@
               <span>Typ des Versandetiketts</span>
               <select id="profile"></select>
             </label>
+            <!-- Nur bei eigenen Label-Typen sichtbar; eingebaute lassen sich nicht löschen. -->
+            <div class="field-actions">
+              <button type="button" class="btn link" id="delete-profile" hidden>Diesen Label-Typ löschen</button>
+            </div>
             <div id="custom-source" class="field-group" hidden>
               <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
               <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
               <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
               <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
-              <p class="hint">Maße des Ausschnitts ab der linken oberen Ecke der Seite.</p>
+              <label class="field field-wide"><span>Als Label-Typ speichern unter dem Namen</span><input type="text" id="profile-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
+              <div class="field field-button"><span>&nbsp;</span><button type="button" class="btn" id="save-profile">Speichern</button></div>
+              <p class="hint">Maße ab der linken oberen Ecke der Seite. Bequemer: bei einer geladenen Datei „Ausschnitt anpassen“ und den Rahmen mit der Maus ziehen.</p>
             </div>
           </div>
         </div>
@@ -75,9 +81,14 @@
               <span>Etikettenformat</span>
               <select id="target"></select>
             </label>
+            <div class="field-actions">
+              <button type="button" class="btn link" id="delete-target" hidden>Dieses Format löschen</button>
+            </div>
             <div id="custom-target" class="field-group" hidden>
               <label class="field"><span>Breite (mm)</span><input type="number" id="target-width" step="0.1" min="10" value="100"></label>
               <label class="field"><span>Höhe (mm)</span><input type="number" id="target-height" step="0.1" min="0" value="50" placeholder="leer = Endlos"></label>
+              <label class="field field-wide"><span>Als Format speichern unter dem Namen</span><input type="text" id="target-name" placeholder="z. B. Mein Etikettendrucker" maxlength="60"></label>
+              <div class="field field-button"><span>&nbsp;</span><button type="button" class="btn" id="save-target">Speichern</button></div>
               <p class="hint">Höhe leer lassen für Endlosrollen – sie ergibt sich aus dem Inhalt.</p>
             </div>
           </div>
@@ -187,10 +198,43 @@
       </div>
       <footer class="result-foot">
         <span class="result-layout"></span>
-        <button type="button" class="btn link result-remove">Entfernen</button>
+        <span class="result-foot-actions">
+          <button type="button" class="btn link result-adjust">Ausschnitt anpassen</button>
+          <button type="button" class="btn link result-remove">Entfernen</button>
+        </span>
       </footer>
     </article>
   </template>
+
+  <!-- Ausschnitt-Editor: ganze Seite anzeigen, Rahmen ziehen, als eigenen Label-Typ speichern. -->
+  <dialog id="crop-editor" class="crop-editor" aria-labelledby="crop-title">
+    <div class="crop-editor-body">
+      <h2 id="crop-title">Ausschnitt festlegen</h2>
+      <p class="hint" id="crop-hint">Rahmen mit der Maus verschieben oder an den Ecken ziehen. Auf der Seite ziehen legt einen neuen Rahmen an. Maße in mm ab der linken oberen Ecke.</p>
+      <div class="crop-stage" id="crop-stage">
+        <canvas id="crop-canvas"></canvas>
+        <div class="crop-rect" id="crop-rect">
+          <div class="crop-handle" data-handle="nw"></div>
+          <div class="crop-handle" data-handle="ne"></div>
+          <div class="crop-handle" data-handle="sw"></div>
+          <div class="crop-handle" data-handle="se"></div>
+        </div>
+      </div>
+      <div class="crop-fields">
+        <label class="field"><span>x (mm)</span><input type="number" id="crop-x" step="0.1" min="0"></label>
+        <label class="field"><span>y (mm)</span><input type="number" id="crop-y" step="0.1" min="0"></label>
+        <label class="field"><span>Breite (mm)</span><input type="number" id="crop-w" step="0.1" min="5"></label>
+        <label class="field"><span>Höhe (mm)</span><input type="number" id="crop-h" step="0.1" min="5"></label>
+        <label class="field field-wide"><span>Name für den Label-Typ</span><input type="text" id="crop-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
+      </div>
+      <div class="crop-actions">
+        <span class="crop-info" id="crop-info"></span>
+        <button type="button" class="btn link" id="crop-cancel">Abbrechen</button>
+        <button type="button" class="btn" id="crop-apply">Nur jetzt verwenden</button>
+        <button type="button" class="btn primary" id="crop-save">Als Label-Typ speichern</button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- Reihenfolge wichtig: erst die Bibliotheken, dann Daten, Kern, Oberfläche. -->
   <script src="vendor/pdf-lib.min.js"></script>

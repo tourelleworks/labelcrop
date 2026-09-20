@@ -26,6 +26,10 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
 - **Drag & Drop** oder Dateiauswahl, mehrere PDFs gleichzeitig
 - **Label-Typ** erkennen (derzeit: Deutsche Post Internetmarke über eBay) oder
   Bereich von Hand angeben
+- **Eigene Label-Typen:** „Ausschnitt anpassen“ zeigt die ganze Seite, Rahmen
+  mit der Maus ziehen, als eigenen Typ speichern – gilt dann für alle Dateien
+  und wird bei gleicher Seitengröße automatisch vorgeschlagen; eigene
+  Etikettenformate ebenso; beides lässt sich wieder löschen
 - **Drucker-Profil:** Etikettenformat (100 × 150 mm Thermodrucker, Brother,
   DYMO, A6, Endlosrolle, eigene Größe), Drehung 0/90/180/270° oder automatisch,
   Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt
@@ -78,7 +82,7 @@ Dann http://localhost:8000 öffnen.
 Ohne Abhängigkeiten, nur Node (≥ 20):
 
 ```
-node --test test/layout.test.js
+node --test test/layout.test.js test/profiles.test.js
 node test/crop-sample.js "test/samples/<label>.pdf" out.pdf brother-62-endless
 ```
 
@@ -87,9 +91,14 @@ Beispiel-PDFs mit echten Adressen liegen nur lokal in `test/samples/`
 
 ## Neues Label-Profil anlegen
 
-In `profiles.js` einen Eintrag ergänzen: Position und Größe des Labels in mm
-ab der linken oberen Ecke der Seite, erwartete Seitengröße und – falls
-möglich – Textmuster zur Erkennung. Kein weiterer Code nötig.
+Als Nutzer: Datei laden, „Ausschnitt anpassen“, Rahmen ziehen, Namen
+vergeben, „Als Label-Typ speichern“. Der Typ liegt im Browser-Speicher des
+Geräts (`localStorage`, Schlüssel `labelcrop-custom-formats`).
+
+Als eingebautes Profil für alle: in `profiles.js` einen Eintrag ergänzen –
+Position und Größe des Labels in mm ab der linken oberen Ecke der Seite,
+erwartete Seitengröße und, falls möglich, Textmuster zur Erkennung. Kein
+weiterer Code nötig.
 
 ## Deployment
 
