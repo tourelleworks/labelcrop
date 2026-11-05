@@ -321,6 +321,29 @@ const LabelCrop = (function () {
     return { rotation: rotation, scale: scale, placement: placement };
   }
 
+  // Texte für die Einstellungszeile. detectionOff meldet den einen Fall, den man
+  // sehen muss: "Eigener Bereich" schneidet alle Dateien gleich zu.
+  function describeSelection(profile, target) {
+    let profileText = "Automatisch erkennen";
+    let detectionOff = false;
+    if (profile !== null) {
+      profileText = profile.name;
+      if (profile.custom) {
+        profileText = "Eigener Bereich (" + formatMm(profile.source.width) + " × " + formatMm(profile.source.height) + " mm), Erkennung aus";
+        detectionOff = true;
+      }
+    }
+    let targetText = target.name;
+    if (target.custom) {
+      if (typeof target.height === "number") {
+        targetText = "Eigene Größe (" + formatMm(target.width) + " × " + formatMm(target.height) + " mm)";
+      } else {
+        targetText = "Eigene Größe (" + formatMm(target.width) + " mm Endlos)";
+      }
+    }
+    return { profile: profileText, target: targetText, detectionOff: detectionOff };
+  }
+
   async function testPrintPdf(target, options) {
     const lib = pdfLib();
     const opts = withDefaults(options);
@@ -456,6 +479,7 @@ const LabelCrop = (function () {
     testPrintPdf: testPrintPdf,
     testPrintPageSize: testPrintPageSize,
     describeOptions: describeOptions,
+    describeSelection: describeSelection,
     outputFileName: outputFileName,
   };
 })();

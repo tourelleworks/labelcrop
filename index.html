@@ -46,42 +46,29 @@
 
     <p id="message" class="message" hidden></p>
 
+    <!-- Einstellungen braucht man einmal, Drucken jeden Tag: Eingerichtet schrumpft
+         die Karte auf eine Zeile, damit Ablegen und Ergebnis auf einen Blick passen. -->
     <section class="card settings">
-      <form id="settings" autocomplete="off">
+      <div class="settings-line">
+        <p id="settings-line-text" class="settings-line-text"></p>
+        <button type="button" class="btn" id="settings-toggle" aria-expanded="true" aria-controls="settings-panel">Fertig</button>
+      </div>
 
-        <!-- Schritt 1: Woher kommt das Label? (Label-Profil aus dem Konzept) -->
-        <div class="settings-block">
-          <h2>Label-Typ <span class="muted">– woher</span></h2>
-          <div class="settings-grid">
+      <div id="settings-panel" class="settings-panel">
+        <form id="settings" autocomplete="off">
+          <div class="settings-grid settings-main">
             <label class="field">
-              <span>Typ des Versandetiketts</span>
+              <span>Label-Typ</span>
               <select id="profile"></select>
             </label>
-            <!-- Nur bei eigenen Label-Typen sichtbar; eingebaute lassen sich nicht löschen. -->
-            <div class="field-actions">
-              <button type="button" class="btn link" id="delete-profile" hidden>Diesen Label-Typ löschen</button>
-            </div>
-            <div id="custom-source" class="field-group" hidden>
-              <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
-              <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
-              <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
-              <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
-              <label class="field field-wide"><span>Als Label-Typ speichern unter dem Namen</span><input type="text" id="profile-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
-              <div class="field field-button"><span>&nbsp;</span><button type="button" class="btn" id="save-profile">Speichern</button></div>
-              <p class="hint">Maße ab der linken oberen Ecke der Seite. Sie gelten für alle Dateien und bleiben gespeichert. Nur ein Label ändern: auf seiner Karte „Ausschnitt anpassen“.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Schritt 2: Wohin soll es? (Drucker-Profil aus dem Konzept) -->
-        <div class="settings-block">
-          <h2>Drucker-Profil <span class="muted">– wohin</span></h2>
-          <div class="settings-grid">
             <label class="field">
               <span>Etikettenformat</span>
               <select id="target"></select>
             </label>
+            <p class="hint" id="custom-area-note" hidden>Der Label-Typ ruht, solange in den Feineinstellungen „Eigener Bereich“ aktiv ist.</p>
+            <!-- Nur bei eigenen Einträgen sichtbar; eingebaute lassen sich nicht löschen. -->
             <div class="field-actions">
+              <button type="button" class="btn link" id="delete-profile" hidden>Diesen Label-Typ löschen</button>
               <button type="button" class="btn link" id="delete-target" hidden>Dieses Format löschen</button>
             </div>
             <div id="custom-target" class="field-group" hidden>
@@ -125,19 +112,31 @@
                 <span>Rand (mm)</span>
                 <input type="number" id="margin" step="0.5" min="0" value="0">
               </label>
+              <label class="field-check">
+                <input type="checkbox" id="use-custom-area">
+                <span>Eigener Bereich: für alle Dateien denselben Ausschnitt verwenden (schaltet die Erkennung aus)</span>
+              </label>
+              <div id="custom-source" class="field-group" hidden>
+                <label class="field"><span>x (mm)</span><input type="number" id="source-x" step="0.1" value="12.7"></label>
+                <label class="field"><span>y (mm)</span><input type="number" id="source-y" step="0.1" value="30.0"></label>
+                <label class="field"><span>Breite (mm)</span><input type="number" id="source-width" step="0.1" min="1" value="76.2"></label>
+                <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
+                <label class="field field-wide"><span>Als Label-Typ speichern unter dem Namen</span><input type="text" id="profile-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
+                <div class="field field-button"><span>&nbsp;</span><button type="button" class="btn" id="save-profile">Speichern</button></div>
+                <p class="hint">Maße ab der linken oberen Ecke der Seite. Nur ein Label ändern: auf seiner Karte „Ausschnitt ändern“.</p>
+              </div>
             </div>
             <p class="hint">Drehung und Lage einmal pro Drucker mit dem Testdruck ausprobieren – danach bleiben sie gespeichert.</p>
           </details>
-        </div>
+        </form>
 
-      </form>
-
-      <div class="settings-foot">
-        <span id="settings-status" class="settings-status"></span>
-        <div class="settings-actions">
-          <button type="button" class="btn" id="test-print">Testdruck drucken</button>
-          <button type="button" class="btn link" id="test-print-save">Testdruck als PDF</button>
-          <button type="button" class="btn link" id="reset-settings">Zurücksetzen</button>
+        <div class="settings-foot">
+          <span id="settings-status" class="settings-status"></span>
+          <div class="settings-actions">
+            <button type="button" class="btn" id="test-print">Testdruck</button>
+            <button type="button" class="btn link" id="test-print-save">Testdruck als PDF</button>
+            <button type="button" class="btn link" id="reset-settings">Zurücksetzen</button>
+          </div>
         </div>
       </div>
     </section>
@@ -153,14 +152,14 @@
       <div id="result-list" class="result-list"></div>
     </section>
 
-    <section class="card hints">
-      <h2>Drucken</h2>
+    <details class="card hints">
+      <summary>Hilfe zum Drucken</summary>
       <ul>
-        <li><strong>Im Druckdialog</strong> nur den Etikettendrucker als Ziel wählen. Das Papierformat setzt LabelCrop auf die Etikettengröße, sofern der Drucker dieses Format kennt – sonst das Etikett einmal im Druckertreiber als Papierformat anlegen. „Skalieren“ auf „Standard“ lassen. Der Browser merkt sich den zuletzt benutzten Drucker.</li>
-        <li><strong>Neuer Drucker?</strong> Erst „Testdruck drucken“: Rahmen, Pfeil und 50-mm-Linie zeigen, ob Papierformat, Drehung und Skalierung stimmen.</li>
-        <li><strong>Ganz ohne Druckdialog:</strong> Chrome mit <code>--kiosk-printing</code> starten (Verknüpfung), dann geht jeder Druck sofort an den Windows-Standarddrucker. Oder LabelCrop Desktop (Java, Ordner <code>desktop/</code> im Repository) mit frei wählbarem Drucker.</li>
+        <li><strong>Im Druckdialog</strong> den Etikettendrucker wählen und „Skalieren“ auf „Standard“ lassen.</li>
+        <li><strong>Falsches Papierformat?</strong> Das Etikett einmal im Druckertreiber als Papierformat anlegen.</li>
+        <li><strong>Neuer Drucker?</strong> Erst unter „Ändern“ einen Testdruck machen: Rahmen, Pfeil und 50-mm-Linie zeigen, ob Format, Drehung und Größe stimmen.</li>
       </ul>
-    </section>
+    </details>
 
   </main>
 
@@ -188,8 +187,8 @@
       <ul class="result-warnings" hidden></ul>
       <div class="result-previews">
         <figure>
-          <canvas class="source-canvas" title="Anklicken, um den Ausschnitt anzupassen"></canvas>
-          <figcaption>Ausschnitt im Original (abgedunkelt = wird entfernt) – anklicken zum Anpassen</figcaption>
+          <canvas class="source-canvas" title="Anklicken, um den Ausschnitt zu ändern"></canvas>
+          <figcaption>Ausschnitt im Original (abgedunkelt = wird entfernt) – anklicken zum Ändern</figcaption>
         </figure>
         <figure>
           <canvas class="result-canvas"></canvas>
@@ -199,7 +198,7 @@
       <footer class="result-foot">
         <span class="result-layout"></span>
         <span class="result-foot-actions">
-          <button type="button" class="btn link result-adjust">Ausschnitt anpassen</button>
+          <button type="button" class="btn link result-adjust">Ausschnitt ändern</button>
           <button type="button" class="btn link result-reset-crop" hidden>Ausschnitt zurücksetzen</button>
           <button type="button" class="btn link result-remove">Entfernen</button>
         </span>
@@ -210,7 +209,7 @@
   <!-- Ausschnitt-Editor: ganze Seite anzeigen, Rahmen ziehen, als eigenen Label-Typ speichern. -->
   <dialog id="crop-editor" class="crop-editor" aria-labelledby="crop-title">
     <div class="crop-editor-body">
-      <h2 id="crop-title">Ausschnitt festlegen</h2>
+      <h2 id="crop-title">Ausschnitt ändern</h2>
       <p class="hint" id="crop-hint">Rahmen verschieben, an Kanten oder Ecken ziehen oder auf der Seite einen neuen aufziehen. Das Ergebnis daneben folgt live.</p>
       <div class="crop-layout">
         <div class="crop-stage" id="crop-stage">

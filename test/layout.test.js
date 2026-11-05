@@ -235,3 +235,27 @@ test("sameLabelSize erkennt gemischte Größen und duldet Rundungen", () => {
   assert.equal(LabelCrop.sameLabelSize([small, { pageWidth: 283, pageHeight: 114 }]), false);
   assert.equal(LabelCrop.sameLabelSize([small, { pageWidth: 216, pageHeight: 170 }]), false);
 });
+
+// Die Einstellungszeile ist bei zugeklappter Karte das Einzige, was man sieht.
+// Ein aktiver "Eigener Bereich" muss dort deshalb eindeutig auftauchen.
+test("describeSelection nennt Auswahl und meldet ausgeschaltete Erkennung", () => {
+  const brother = { id: "b", name: "Brother 62 mm", width: 62, height: null };
+  const auto = LabelCrop.describeSelection(null, brother);
+  assert.equal(auto.profile, "Automatisch erkennen");
+  assert.equal(auto.target, "Brother 62 mm");
+  assert.equal(auto.detectionOff, false);
+
+  const named = LabelCrop.describeSelection({ name: "DHL" }, brother);
+  assert.equal(named.profile, "DHL");
+  assert.equal(named.detectionOff, false);
+
+  const area = { name: "Eigener Bereich …", custom: true, source: { x: 0, y: 0, width: 76.2, height: 40 } };
+  const custom = LabelCrop.describeSelection(area, { name: "Eigene Größe …", custom: true, width: 100, height: 50 });
+  assert.equal(custom.detectionOff, true);
+  assert.match(custom.profile, /Eigener Bereich/);
+  assert.match(custom.profile, /Erkennung aus/);
+  assert.match(custom.target, /^Eigene Größe \(100/);
+
+  const endless = LabelCrop.describeSelection(null, { name: "Eigene Größe …", custom: true, width: 62, height: null });
+  assert.match(endless.target, /Endlos/);
+});

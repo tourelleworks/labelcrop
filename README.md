@@ -24,24 +24,28 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
 ## Funktionen
 
 - **Drag & Drop** oder Dateiauswahl, mehrere PDFs gleichzeitig
-- **Label-Typ** erkennen (derzeit: Deutsche Post Internetmarke über eBay) oder
-  Bereich von Hand angeben
-- **Eigene Label-Typen:** Klick aufs Vorschaubild oder „Ausschnitt anpassen“
-  zeigt die ganze Seite; Rahmen verschieben, an Ecken und Kanten ziehen, das
-  Ergebnis daneben folgt live; als eigenen Typ speichern – gilt dann für alle
-  Dateien und wird bei gleicher Seitengröße automatisch vorgeschlagen; eigene
-  Etikettenformate ebenso; beides lässt sich wieder löschen
-- **Drucker-Profil:** Etikettenformat (100 × 150 mm Thermodrucker, Brother,
-  DYMO, A6, Endlosrolle, eigene Größe), Drehung 0/90/180/270° oder automatisch,
-  Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt
+- **Label-Typ** erkennen (derzeit: Deutsche Post Internetmarke über eBay);
+  in den Feineinstellungen lässt sich ein fester Bereich für alle Dateien angeben
+- **Ausschnitt ändern:** Klick aufs Vorschaubild oder „Ausschnitt ändern“ zeigt
+  die ganze Seite; Rahmen verschieben, an Ecken und Kanten ziehen, das Ergebnis
+  daneben folgt live; nur für dieses Label übernehmen oder als eigenen Label-Typ
+  speichern – der gilt dann für alle Dateien und wird bei gleicher Seitengröße
+  automatisch vorgeschlagen; eigene Etikettenformate ebenso; beides lässt sich
+  wieder löschen
+- **Etikettenformat:** 100 × 150 mm Thermodrucker, Brother, DYMO, A6,
+  Endlosrolle, eigene Größe; dazu Drehung 0/90/180/270° oder automatisch,
+  Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt;
+  eingerichtet schrumpfen die Einstellungen auf eine Zeile
 - **Testdruck** zum Kalibrieren: Rahmen, Pfeil zum Seitenanfang, 50-mm-Linien
 - **Vorschau** des Ausschnitts im Original und des Ergebnisses
 - **Drucken** über den Browser-Druckdialog – das Papierformat ist dabei schon
   die Etikettengröße (jede Seite wird mit 600 dpi gerastert und als HTML-Seite
   mit `@page`-Größe gedruckt); oder **speichern**, einzeln oder alle Labels
-  in einer PDF. Ohne Dialog: Chrome mit `--kiosk-printing` starten
-- **Direktdruck ohne Dialog:** [LabelCrop Desktop](desktop/README.md) (Java +
-  PDFBox) druckt direkt an den eingestellten Etikettendrucker
+  in einer PDF
+- **Drucken ohne Dialog:** Chrome per Verknüpfung mit `--kiosk-printing` starten,
+  dann geht jeder Druck sofort an den Windows-Standarddrucker; oder
+  [LabelCrop Desktop](desktop/README.md) (Java + PDFBox), das direkt an einen frei
+  wählbaren Etikettendrucker druckt
 - **PWA**: installierbar als Desktop-App, offline nutzbar, öffnet PDFs per
   „Öffnen mit“ (Chrome/Edge)
 - **Datenschutz**: alles läuft lokal im Browser, nichts verlässt das Gerät
@@ -92,7 +96,7 @@ Beispiel-PDFs mit echten Adressen liegen nur lokal in `test/samples/`
 
 ## Neues Label-Profil anlegen
 
-Als Nutzer: Datei laden, „Ausschnitt anpassen“, Rahmen ziehen, Namen
+Als Nutzer: Datei laden, „Ausschnitt ändern“, Rahmen ziehen, Namen
 vergeben, „Als Label-Typ speichern“. Der Typ liegt im Browser-Speicher des
 Geräts (`localStorage`, Schlüssel `labelcrop-custom-formats`).
 

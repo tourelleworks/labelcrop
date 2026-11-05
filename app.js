@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.6";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.7";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -64,6 +64,12 @@ const dom = {
   fileInput: byId("file-input"),
   form: byId("settings"),
   profile: byId("profile"),
+  useCustomArea: byId("use-custom-area"),
+  customAreaNote: byId("custom-area-note"),
+  fineTuning: byId("fine-tuning"),
+  settingsPanel: byId("settings-panel"),
+  settingsToggle: byId("settings-toggle"),
+  settingsLineText: byId("settings-line-text"),
   customSource: byId("custom-source"),
   sourceX: byId("source-x"),
   sourceY: byId("source-y"),
@@ -150,7 +156,8 @@ function describeTargetSize(target) {
 }
 
 // Auswahlfelder neu aufbauen: eingebaute Einträge, dann die eigenen als Gruppe,
-// zuletzt "Eigener Bereich" bzw. "Eigene Größe". Wird nach Speichern/Löschen wiederholt.
+// beim Format zuletzt "Eigene Größe". "Eigener Bereich" ist kein Eintrag mehr,
+// sondern ein Häkchen in den Feineinstellungen. Wird nach Speichern/Löschen wiederholt.
 function fillProfileSelect(selectedId) {
   const select = dom.profile;
   select.textContent = "";
@@ -167,7 +174,6 @@ function fillProfileSelect(selectedId) {
     }
     select.appendChild(group);
   }
-  select.appendChild(optionFor("custom", "Eigener Bereich …"));
   if (selectHasOption(select, selectedId)) {
     select.value = selectedId;
   } else {
@@ -209,18 +215,17 @@ function numberValue(input, fallback) {
 // eingegebenen Werten – der Kern kennt keine Formularfelder.
 function readSettings() {
   let profile = null;   // null = automatisch erkennen
-  if (dom.profile.value !== AUTO_PROFILE_ID) {
+  if (dom.useCustomArea.checked) {
+    profile = Object.assign({}, LabelCropProfiles.findProfile("custom"), {
+      source: {
+        x: numberValue(dom.sourceX, 0),
+        y: numberValue(dom.sourceY, 0),
+        width: Math.max(1, numberValue(dom.sourceWidth, 1)),
+        height: Math.max(1, numberValue(dom.sourceHeight, 1)),
+      },
+    });
+  } else if (dom.profile.value !== AUTO_PROFILE_ID) {
     profile = LabelCropProfiles.findProfile(dom.profile.value);
-    if (profile !== null && profile.custom) {
-      profile = Object.assign({}, profile, {
-        source: {
-          x: numberValue(dom.sourceX, 0),
-          y: numberValue(dom.sourceY, 0),
-          width: Math.max(1, numberValue(dom.sourceWidth, 1)),
-          height: Math.max(1, numberValue(dom.sourceHeight, 1)),
-        },
-      });
-    }
   }
 
   let target = LabelCropProfiles.findTarget(dom.target.value);
@@ -253,8 +258,11 @@ function isSourceSizeTarget() {
 
 function updateSettingsVisibility() {
   const profile = LabelCropProfiles.findProfile(dom.profile.value);
-  dom.customSource.hidden = !(profile !== null && profile.custom);
-  dom.deleteProfile.hidden = !LabelCropProfiles.isUserDefined(profile);
+  const customArea = dom.useCustomArea.checked;
+  dom.customSource.hidden = !customArea;
+  dom.customAreaNote.hidden = !customArea;
+  dom.profile.disabled = customArea;
+  dom.deleteProfile.hidden = customArea || !LabelCropProfiles.isUserDefined(profile);
   const target = LabelCropProfiles.findTarget(dom.target.value);
   dom.customTarget.hidden = !(target !== null && target.custom);
   dom.deleteTarget.hidden = !LabelCropProfiles.isUserDefined(target);
@@ -269,6 +277,7 @@ function updateProfileSummary() {
   const settings = readSettings();
   const described = LabelCrop.describeOptions(settings.options);
   const parts = [];
+  if (dom.useCustomArea.checked) { parts.push("Eigener Bereich"); }
   if (!isSourceSizeTarget()) {
     parts.push(described.scale);
     parts.push(described.placement);
@@ -276,6 +285,59 @@ function updateProfileSummary() {
   parts.push("Drehung " + described.rotation);
   parts.push("Rand " + String(settings.options.margin).replace(".", ",") + " mm");
   dom.profileSummary.textContent = parts.join(" · ");
+  renderSettingsLine(settings);
+}
+
+function appendSettingsLineValue(label, value, warn) {
+  if (label !== "") { dom.settingsLineText.appendChild(document.createTextNode(label + " ")); }
+  const strong = document.createElement("strong");
+  strong.textContent = value;   // textContent: eigene Namen sind Nutzereingaben, kein HTML
+  if (warn) { strong.className = "settings-line-warn"; }
+  dom.settingsLineText.appendChild(strong);
+}
+
+// Die Zeile über den Einstellungen. Bei offener Karte stehen die Werte schon in
+// den Feldern, dort reicht die Überschrift.
+function renderSettingsLine(settings) {
+  dom.settingsLineText.textContent = "";
+  if (!dom.settingsPanel.hidden) {
+    appendSettingsLineValue("", "Einstellungen", false);
+    return;
+  }
+  const selection = LabelCrop.describeSelection(settings.profile, settings.target);
+  appendSettingsLineValue("Label-Typ:", selection.profile, selection.detectionOff);
+  dom.settingsLineText.appendChild(document.createTextNode(" · "));
+  appendSettingsLineValue("Format:", selection.target, false);
+}
+
+function setSettingsOpen(open) {
+  dom.settingsPanel.hidden = !open;
+  dom.settingsToggle.setAttribute("aria-expanded", String(open));
+  if (open) {
+    dom.settingsToggle.textContent = "Fertig";
+  } else {
+    dom.settingsToggle.textContent = "Ändern";
+    // Bleibt für den Rest der Sitzung, auch wenn die Karte wieder aufgeht: Sonst
+    // spränge die Karte samt Knopf beim Klick auf "Ändern" unter den Mauszeiger weg.
+    document.body.classList.add("settings-done");
+  }
+  renderSettingsLine(readSettings());
+}
+
+// Zuklappen merkt die Einstellungen: Beim nächsten Besuch gilt die App als
+// eingerichtet und öffnet gleich mit der einen Zeile, auch ohne geänderten Wert.
+function closeSettings() {
+  if (dom.settingsPanel.hidden) { return; }
+  saveSettings();
+  setSettingsOpen(false);
+}
+
+function toggleSettings() {
+  if (dom.settingsPanel.hidden) {
+    setSettingsOpen(true);
+  } else {
+    closeSettings();
+  }
 }
 
 function onTargetChanged() {
@@ -330,10 +392,13 @@ function applySettings(values) {
     field.value = value;
   }
   marginTouched = values.marginTouched === true;
+  // Bis Version 0.6 war "Eigener Bereich" ein Eintrag im Label-Typ. Alte Stände
+  // tragen dort "custom"; die Schleife oben hat das Feld schon auf die Vorgabe gesetzt.
+  dom.useCustomArea.checked = values.useCustomArea === true || values.profile === "custom";
 }
 
 function saveSettings() {
-  const values = { marginTouched: marginTouched };
+  const values = { marginTouched: marginTouched, useCustomArea: dom.useCustomArea.checked };
   for (const key in SETTINGS_FIELDS) {
     values[key] = SETTINGS_FIELDS[key].value;
   }
@@ -364,6 +429,7 @@ function loadSettings() {
   } else {
     showSettingsStatus("Änderungen werden automatisch auf diesem Gerät gemerkt.");
   }
+  return Object.keys(values).length > 0;
 }
 
 function resetSettings() {
@@ -403,6 +469,8 @@ function round1(value) {
 
 function afterProfileListChanged(selectedId, statusText) {
   fillProfileSelect(selectedId);
+  // Der gespeicherte Typ soll gelten; ein aktiver "Eigener Bereich" würde ihn überdecken.
+  dom.useCustomArea.checked = false;
   updateSettingsVisibility();
   saveSettings();
   scheduleReprocess();
@@ -772,6 +840,8 @@ async function addFiles(fileList) {
       rejected.push(file.name);
       continue;
     }
+    // Ab jetzt zählt das Ergebnis: Die offene Karte würde es aus dem Bild schieben.
+    closeSettings();
     await addFile(file);
   }
   if (rejected.length > 0) {
@@ -871,10 +941,10 @@ function resolveProfile(entry, settings) {
     } else {
       profile = LabelCropProfiles.PROFILES[0];
       note = "nicht erkannt, angenommen: " + profile.name;
-      warnings.push("Das Label wurde nicht als bekannter Typ erkannt. Bitte in der Vorschau prüfen – mit „Ausschnitt anpassen“ lässt sich der Bereich selbst festlegen und speichern.");
+      warnings.push("Das Label wurde nicht als bekannter Typ erkannt. Bitte in der Vorschau prüfen – mit „Ausschnitt ändern“ lässt sich der Bereich selbst festlegen und speichern.");
     }
   } else {
-    note = "Profil: " + profile.name;
+    note = "Label-Typ: " + profile.name;
     if (!LabelCrop.pageSizeMatches(profile, entry.mediaBox)) {
       warnings.push("Die Seitengröße passt nicht zum Profil – der Ausschnitt sitzt womöglich falsch.");
     }
@@ -1412,7 +1482,12 @@ function bindEvents() {
     }
   });
 
+  dom.settingsToggle.addEventListener("click", toggleSettings);
   dom.profile.addEventListener("change", function () {
+    updateSettingsVisibility();
+    scheduleReprocess();
+  });
+  dom.useCustomArea.addEventListener("change", function () {
     updateSettingsVisibility();
     scheduleReprocess();
   });
@@ -1512,7 +1587,11 @@ function init() {
   fillProfileSelect(AUTO_PROFILE_ID);
   fillTargetSelect("source");
   dom.pwaStatus.textContent = "v" + APP_VERSION;
-  loadSettings();   // erst wenn die Auswahlfelder gefüllt sind
+  const alreadySetUp = loadSettings();   // erst wenn die Auswahlfelder gefüllt sind
+  // Beim ersten Besuch offen, danach nur noch die eine Zeile.
+  setSettingsOpen(!alreadySetUp);
+  // Ein aktiver "Eigener Bereich" soll beim Öffnen nicht hinter "Feineinstellungen" stecken.
+  dom.fineTuning.open = dom.useCustomArea.checked;
   updateSettingsVisibility();
   bindEvents();
   registerPwa();
