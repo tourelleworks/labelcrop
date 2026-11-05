@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.4";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.5";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -26,7 +26,12 @@ const PRINT_FRAME_LIFETIME_MS = 120000;      // so lange bleibt der unsichtbare 
 const PRINT_DPI = 600;                        // Rasterauflösung für den Druck (Etikettendrucker haben 203–300 dpi)
 const PRINT_MAX_PX = 4200;                    // Obergrenze je Seite, damit große Formate nicht zu viel Speicher brauchen
 const CROP_MIN_MM = 5;                        // kleinster Ausschnitt im Editor
-const CROP_STAGE_MAX_PX = 560;                // Breite der Seitenansicht im Editor (CSS-Pixel)
+const CROP_STAGE_MAX_PX = 520;                // Breite der Seitenansicht im Editor (CSS-Pixel)
+const CROP_SIDE_MIN_PX = 260;                 // ab dieser Restbreite steht die Ergebnis-Spalte neben der Seite
+const CROP_HIRES_PX_PER_MM = 6;               // Seite einmal fein rendern; Editor und Live-Ergebnis zeichnen daraus
+const CROP_HIRES_MAX_PX = 4000;               // Obergrenze der feinen Seite (Speicher)
+const CROP_PREVIEW_MAX_PX = 300;              // Kantenlänge des Live-Ergebnisses im Editor (CSS-Pixel)
+const CROP_PREVIEW_PX_PER_MM = 4;             // … aber nie größer als dieser Maßstab
 
 // Welche Formularfelder gemerkt werden. Die Vorgaben stehen hier und nicht im
 // HTML, damit "Zurücksetzen" und der erste Start dieselben Werte liefern.
@@ -85,6 +90,7 @@ const dom = {
   cropStage: byId("crop-stage"),
   cropCanvas: byId("crop-canvas"),
   cropRect: byId("crop-rect"),
+  cropPreview: byId("crop-preview-canvas"),
   cropX: byId("crop-x"),
   cropY: byId("crop-y"),
   cropW: byId("crop-w"),
@@ -473,6 +479,9 @@ const cropEdit = {
   rect: null,        // { x, y, width, height } in mm ab der linken oberen Ecke
   drag: null,        // laufende Zeigeraktion: { mode, handle, start, startRect }
   renderTask: null,
+  hires: null,       // die Seite einmal fein gerendert (Canvas); Bühne und Live-Ergebnis zeichnen daraus
+  hiresPxPerMm: 1,
+  previewPending: false,
 };
 
 function clamp(value, min, max) {
@@ -498,46 +507,101 @@ async function openCropEditor(entry) {
   if (entry.page === null || entry.mediaBox === null) { return; }
   cropEdit.entry = entry;
   cropEdit.drag = null;
+  cropEdit.hires = null;
   const media = entry.mediaBox;
   cropEdit.pageWidthMm = LabelCrop.ptToMm(media.width);
   cropEdit.pageHeightMm = LabelCrop.ptToMm(media.height);
-  const stageWidth = Math.min(CROP_STAGE_MAX_PX, Math.max(240, window.innerWidth - 80));
+  // Bühne so breit wie möglich, aber die Ergebnis-Spalte soll auf breiten
+  // Bildschirmen daneben passen; auf schmalen rutscht sie darunter.
+  const available = Math.max(240, window.innerWidth - 80);
+  let stageWidth = Math.min(CROP_STAGE_MAX_PX, available);
+  if (available - stageWidth < CROP_SIDE_MIN_PX && available > CROP_SIDE_MIN_PX * 2) {
+    stageWidth = Math.min(CROP_STAGE_MAX_PX, available - CROP_SIDE_MIN_PX);
+  }
   cropEdit.pxPerMm = stageWidth / cropEdit.pageWidthMm;
   const stageHeight = cropEdit.pageHeightMm * cropEdit.pxPerMm;
   dom.cropStage.style.width = Math.round(stageWidth) + "px";
   dom.cropStage.style.height = Math.round(stageHeight) + "px";
+  prepareCanvas(dom.cropCanvas, stageWidth, stageHeight);
+  dom.cropCanvas.style.height = Math.round(stageHeight) + "px";
+  prepareCanvas(dom.cropPreview, 1, 1);
   dom.cropName.value = "";
   dom.cropTitle.textContent = "Ausschnitt festlegen – " + entry.name;
   setCropRect(currentRectMm(entry));
   dom.cropEditor.showModal();
-  await drawCropPage(entry, stageWidth, stageHeight);
+  await renderCropPage(entry);
 }
 
-async function drawCropPage(entry, stageWidth, stageHeight) {
-  const scale = cropEdit.pxPerMm / LabelCrop.mmToPt(1);   // pdf.js rechnet in Pixel je pt
+// Die Seite einmal fein rendern (pdf.js), dann Bühne und Live-Ergebnis nur noch
+// per drawImage daraus zeichnen – das ist beim Ziehen flüssig, pdf.js wäre es nicht.
+async function renderCropPage(entry) {
   const media = entry.mediaBox;
+  let pxPerMm = CROP_HIRES_PX_PER_MM;
+  const longest = Math.max(cropEdit.pageWidthMm, cropEdit.pageHeightMm) * pxPerMm;
+  if (longest > CROP_HIRES_MAX_PX) { pxPerMm = pxPerMm * CROP_HIRES_MAX_PX / longest; }
+  const scale = pxPerMm / LabelCrop.mmToPt(1);   // pdf.js rechnet in Pixel je pt
   // Wie in der Vorschau: die linke obere Ecke der MediaBox auf (0, 0) legen.
   const base = entry.page.getViewport({ scale: scale });
   const origin = base.convertToViewportPoint(media.x, media.y + media.height);
   const viewport = entry.page.getViewport({ scale: scale, offsetX: -origin[0], offsetY: -origin[1] });
+
+  const hires = document.createElement("canvas");
+  hires.width = Math.max(1, Math.round(cropEdit.pageWidthMm * pxPerMm));
+  hires.height = Math.max(1, Math.round(cropEdit.pageHeightMm * pxPerMm));
+  const ctx = hires.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, hires.width, hires.height);
+
   if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
-  const prepared = prepareCanvas(dom.cropCanvas, stageWidth, stageHeight);
-  dom.cropCanvas.style.height = Math.round(stageHeight) + "px";
-  const task = entry.page.render({ canvasContext: prepared.ctx, viewport: viewport, transform: [prepared.dpr, 0, 0, prepared.dpr, 0, 0], intent: RENDER_INTENT });
+  const task = entry.page.render({ canvasContext: ctx, viewport: viewport, intent: RENDER_INTENT });
   cropEdit.renderTask = task;
   try {
     await task.promise;
   } catch (error) {
     if (!isRenderCancelled(error)) { console.error(error); }
+    return;
   } finally {
     if (cropEdit.renderTask === task) { cropEdit.renderTask = null; }
   }
+  if (cropEdit.entry !== entry) { return; }   // Editor inzwischen geschlossen oder neu geöffnet
+  cropEdit.hires = hires;
+  cropEdit.hiresPxPerMm = pxPerMm;
+  drawCropStage();
+  drawCropPreview();
+}
+
+function drawCropStage() {
+  if (cropEdit.hires === null) { return; }
+  const canvas = dom.cropCanvas;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(cropEdit.hires, 0, 0, cropEdit.hires.width, cropEdit.hires.height, 0, 0, canvas.width, canvas.height);
+}
+
+// Live-Ergebnis: genau der Bereich im Rahmen, so groß wie der Platz erlaubt.
+function drawCropPreview() {
+  cropEdit.previewPending = false;
+  if (cropEdit.hires === null || cropEdit.rect === null) { return; }
+  const r = cropEdit.rect;
+  const k = Math.min(CROP_PREVIEW_PX_PER_MM, CROP_PREVIEW_MAX_PX / r.width, CROP_PREVIEW_MAX_PX / r.height);
+  const prepared = prepareCanvas(dom.cropPreview, r.width * k, r.height * k);
+  const h = cropEdit.hiresPxPerMm;
+  prepared.ctx.drawImage(cropEdit.hires, r.x * h, r.y * h, r.width * h, r.height * h, 0, 0, dom.cropPreview.width, dom.cropPreview.height);
+}
+
+// Beim Ziehen kommen viele Ereignisse pro Sekunde; ein Bild alle 16 ms reicht.
+// setTimeout statt requestAnimationFrame, damit es auch in einem Hintergrund-Tab weiterläuft.
+function scheduleCropPreview() {
+  if (cropEdit.previewPending) { return; }
+  cropEdit.previewPending = true;
+  setTimeout(drawCropPreview, 16);
 }
 
 function closeCropEditor() {
   if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
   cropEdit.entry = null;
   cropEdit.drag = null;
+  cropEdit.hires = null;   // Speicher freigeben
   if (dom.cropEditor.open) { dom.cropEditor.close(); }
 }
 
@@ -564,6 +628,7 @@ function setCropRect(rect) {
   setFieldUnlessFocused(dom.cropW, width.toFixed(1));
   setFieldUnlessFocused(dom.cropH, height.toFixed(1));
   dom.cropInfo.textContent = formatMm(width) + " × " + formatMm(height) + " mm";
+  scheduleCropPreview();
 }
 
 function cropPointerMm(event) {
@@ -615,7 +680,8 @@ function onCropPointerMove(event) {
     setCropRect({ x: Math.min(r.x, px), y: Math.min(r.y, py), width: Math.abs(px - r.x), height: Math.abs(py - r.y) });
     return;
   }
-  // Ecke ziehen: die gegenüberliegende Ecke bleibt stehen.
+  // Ecke oder Kante ziehen: die gegenüberliegende Seite bleibt stehen.
+  // Griffnamen wie Himmelsrichtungen: "n" nur oben, "se" rechts unten.
   let left = r.x;
   let top = r.y;
   let right = r.x + r.width;
@@ -752,6 +818,8 @@ function createEntry(name) {
   element.querySelector(".result-print").addEventListener("click", function () { printEntry(entry); });
   element.querySelector(".result-save").addEventListener("click", function () { saveEntry(entry); });
   element.querySelector(".result-adjust").addEventListener("click", function () { openCropEditor(entry); });
+  // Das Vorschaubild selbst öffnet den Editor – der naheliegendste Griff.
+  element.querySelector(".source-canvas").addEventListener("click", function () { openCropEditor(entry); });
   element.querySelector(".result-remove").addEventListener("click", function () { removeEntry(entry); });
   return entry;
 }
@@ -1367,6 +1435,7 @@ function bindEvents() {
     if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }
     cropEdit.entry = null;
     cropEdit.drag = null;
+    cropEdit.hires = null;
   });
 
   dom.printAll.addEventListener("click", printAll);

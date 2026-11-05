@@ -188,8 +188,8 @@
       <ul class="result-warnings" hidden></ul>
       <div class="result-previews">
         <figure>
-          <canvas class="source-canvas"></canvas>
-          <figcaption>Ausschnitt im Original (abgedunkelt = wird entfernt)</figcaption>
+          <canvas class="source-canvas" title="Anklicken, um den Ausschnitt anzupassen"></canvas>
+          <figcaption>Ausschnitt im Original (abgedunkelt = wird entfernt) – anklicken zum Anpassen</figcaption>
         </figure>
         <figure>
           <canvas class="result-canvas"></canvas>
@@ -210,28 +210,40 @@
   <dialog id="crop-editor" class="crop-editor" aria-labelledby="crop-title">
     <div class="crop-editor-body">
       <h2 id="crop-title">Ausschnitt festlegen</h2>
-      <p class="hint" id="crop-hint">Rahmen mit der Maus verschieben oder an den Ecken ziehen. Auf der Seite ziehen legt einen neuen Rahmen an. Maße in mm ab der linken oberen Ecke.</p>
-      <div class="crop-stage" id="crop-stage">
-        <canvas id="crop-canvas"></canvas>
-        <div class="crop-rect" id="crop-rect">
-          <div class="crop-handle" data-handle="nw"></div>
-          <div class="crop-handle" data-handle="ne"></div>
-          <div class="crop-handle" data-handle="sw"></div>
-          <div class="crop-handle" data-handle="se"></div>
+      <p class="hint" id="crop-hint">Rahmen verschieben, an Kanten oder Ecken ziehen oder auf der Seite einen neuen aufziehen. Das Ergebnis daneben folgt live.</p>
+      <div class="crop-layout">
+        <div class="crop-stage" id="crop-stage">
+          <canvas id="crop-canvas"></canvas>
+          <!-- Acht Griffe wie in Bildprogrammen: vier Ecken, vier Kanten. -->
+          <div class="crop-rect" id="crop-rect">
+            <div class="crop-handle" data-handle="nw"></div>
+            <div class="crop-handle" data-handle="n"></div>
+            <div class="crop-handle" data-handle="ne"></div>
+            <div class="crop-handle" data-handle="e"></div>
+            <div class="crop-handle" data-handle="se"></div>
+            <div class="crop-handle" data-handle="s"></div>
+            <div class="crop-handle" data-handle="sw"></div>
+            <div class="crop-handle" data-handle="w"></div>
+          </div>
         </div>
-      </div>
-      <div class="crop-fields">
-        <label class="field"><span>x (mm)</span><input type="number" id="crop-x" step="0.1" min="0"></label>
-        <label class="field"><span>y (mm)</span><input type="number" id="crop-y" step="0.1" min="0"></label>
-        <label class="field"><span>Breite (mm)</span><input type="number" id="crop-w" step="0.1" min="5"></label>
-        <label class="field"><span>Höhe (mm)</span><input type="number" id="crop-h" step="0.1" min="5"></label>
-        <label class="field field-wide"><span>Name für den Label-Typ</span><input type="text" id="crop-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
-      </div>
-      <div class="crop-actions">
-        <span class="crop-info" id="crop-info"></span>
-        <button type="button" class="btn link" id="crop-cancel">Abbrechen</button>
-        <button type="button" class="btn" id="crop-apply">Nur jetzt verwenden</button>
-        <button type="button" class="btn primary" id="crop-save">Als Label-Typ speichern</button>
+        <div class="crop-side">
+          <figure class="crop-preview">
+            <canvas id="crop-preview-canvas"></canvas>
+            <figcaption>Ergebnis: <span id="crop-info"></span></figcaption>
+          </figure>
+          <div class="crop-fields">
+            <label class="field"><span>x (mm)</span><input type="number" id="crop-x" step="0.1" min="0"></label>
+            <label class="field"><span>y (mm)</span><input type="number" id="crop-y" step="0.1" min="0"></label>
+            <label class="field"><span>Breite (mm)</span><input type="number" id="crop-w" step="0.1" min="5"></label>
+            <label class="field"><span>Höhe (mm)</span><input type="number" id="crop-h" step="0.1" min="5"></label>
+          </div>
+          <label class="field"><span>Name für den Label-Typ</span><input type="text" id="crop-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
+          <div class="crop-actions">
+            <button type="button" class="btn primary" id="crop-save">Als Label-Typ speichern</button>
+            <button type="button" class="btn" id="crop-apply">Nur jetzt verwenden</button>
+            <button type="button" class="btn link" id="crop-cancel">Abbrechen</button>
+          </div>
+        </div>
       </div>
     </div>
   </dialog>

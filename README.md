@@ -26,9 +26,10 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
 - **Drag & Drop** oder Dateiauswahl, mehrere PDFs gleichzeitig
 - **Label-Typ** erkennen (derzeit: Deutsche Post Internetmarke über eBay) oder
   Bereich von Hand angeben
-- **Eigene Label-Typen:** „Ausschnitt anpassen“ zeigt die ganze Seite, Rahmen
-  mit der Maus ziehen, als eigenen Typ speichern – gilt dann für alle Dateien
-  und wird bei gleicher Seitengröße automatisch vorgeschlagen; eigene
+- **Eigene Label-Typen:** Klick aufs Vorschaubild oder „Ausschnitt anpassen“
+  zeigt die ganze Seite; Rahmen verschieben, an Ecken und Kanten ziehen, das
+  Ergebnis daneben folgt live; als eigenen Typ speichern – gilt dann für alle
+  Dateien und wird bei gleicher Seitengröße automatisch vorgeschlagen; eigene
   Etikettenformate ebenso; beides lässt sich wieder löschen
 - **Drucker-Profil:** Etikettenformat (100 × 150 mm Thermodrucker, Brother,
   DYMO, A6, Endlosrolle, eigene Größe), Drehung 0/90/180/270° oder automatisch,
