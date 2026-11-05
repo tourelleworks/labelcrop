@@ -225,6 +225,19 @@ const LabelCrop = (function () {
     return null;
   }
 
+  // Haben alle Seiten dieselbe Größe? Ein Druckauftrag aus dem Browser kennt nur
+  // ein Papierformat; abweichende Labels würden darin abgeschnitten.
+  // Eine Toleranz von 0,5 pt fängt Rundungen ab, echte Unterschiede sind größer.
+  function sameLabelSize(layouts) {
+    if (layouts.length === 0) { return true; }
+    const first = layouts[0];
+    for (const layout of layouts) {
+      if (Math.abs(layout.pageWidth - first.pageWidth) > 0.5) { return false; }
+      if (Math.abs(layout.pageHeight - first.pageHeight) > 0.5) { return false; }
+    }
+    return true;
+  }
+
   // ------------------------------------------------------------
   // PDF-Operationen
   // ------------------------------------------------------------
@@ -437,6 +450,7 @@ const LabelCrop = (function () {
     pageSizeMatches: pageSizeMatches,
     textMatches: textMatches,
     detectProfile: detectProfile,
+    sameLabelSize: sameLabelSize,
     cropPdf: cropPdf,
     mergePdfs: mergePdfs,
     testPrintPdf: testPrintPdf,

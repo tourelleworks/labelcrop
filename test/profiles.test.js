@@ -130,3 +130,25 @@ test("Erkennung: eingebautes Post-Profil gewinnt, eigener Typ greift bei anderen
   const noPage = profiles.addProfile({ name: "Frei", source: { x: 0, y: 0, width: 50, height: 50 }, page: null });
   assert.equal(noPage.page, null);
 });
+
+// "Nur für dieses Label" darf nichts hinterlassen: keine Auswahl, kein Speicher,
+// keine Erkennung – sonst wirkt ein einzelner Ausschnitt auf den ganzen Stapel.
+test("Einmal-Profil: schneidet genau den Bereich und bleibt unsichtbar", () => {
+  const storage = fakeStorage();
+  profiles.load(storage);
+  const rect = { x: 10, y: 20, width: 80, height: 40 };
+  const single = profiles.singleUseProfile(rect);
+
+  const box = LabelCrop.sourceBox(single, A4);
+  assert.ok(Math.abs(LabelCrop.ptToMm(box.width) - 80) < 0.001);
+  assert.ok(Math.abs(LabelCrop.ptToMm(box.height) - 40) < 0.001);
+  assert.ok(Math.abs(LabelCrop.ptToMm(box.left) - 10) < 0.001);
+
+  assert.equal(profiles.allProfiles().indexOf(single), -1);
+  assert.equal(profiles.findProfile(single.id), null);
+  assert.deepEqual(storage.data, {});
+
+  // Eine Kopie: Spätere Änderungen am Editor-Rahmen dürfen das Profil nicht verschieben.
+  rect.x = 99;
+  assert.equal(single.source.x, 10);
+});

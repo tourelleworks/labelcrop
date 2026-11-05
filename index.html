@@ -68,7 +68,7 @@
               <label class="field"><span>Höhe (mm)</span><input type="number" id="source-height" step="0.1" min="1" value="40.2"></label>
               <label class="field field-wide"><span>Als Label-Typ speichern unter dem Namen</span><input type="text" id="profile-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
               <div class="field field-button"><span>&nbsp;</span><button type="button" class="btn" id="save-profile">Speichern</button></div>
-              <p class="hint">Maße ab der linken oberen Ecke der Seite. Bequemer: bei einer geladenen Datei „Ausschnitt anpassen“ und den Rahmen mit der Maus ziehen.</p>
+              <p class="hint">Maße ab der linken oberen Ecke der Seite. Sie gelten für alle Dateien und bleiben gespeichert. Nur ein Label ändern: auf seiner Karte „Ausschnitt anpassen“.</p>
             </div>
           </div>
         </div>
@@ -200,6 +200,7 @@
         <span class="result-layout"></span>
         <span class="result-foot-actions">
           <button type="button" class="btn link result-adjust">Ausschnitt anpassen</button>
+          <button type="button" class="btn link result-reset-crop" hidden>Ausschnitt zurücksetzen</button>
           <button type="button" class="btn link result-remove">Entfernen</button>
         </span>
       </footer>
@@ -240,7 +241,7 @@
           <label class="field"><span>Name für den Label-Typ</span><input type="text" id="crop-name" placeholder="z. B. DHL Paketmarke" maxlength="60"></label>
           <div class="crop-actions">
             <button type="button" class="btn primary" id="crop-save">Als Label-Typ speichern</button>
-            <button type="button" class="btn" id="crop-apply">Nur jetzt verwenden</button>
+            <button type="button" class="btn" id="crop-apply">Nur für dieses Label</button>
             <button type="button" class="btn link" id="crop-cancel">Abbrechen</button>
           </div>
         </div>

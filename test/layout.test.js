@@ -224,3 +224,14 @@ test("Ausgabename hängt _label an", () => {
   assert.equal(LabelCrop.outputFileName("label.PDF"), "label_label.pdf");
   assert.equal(LabelCrop.outputFileName("ohne-endung"), "ohne-endung_label.pdf");
 });
+
+// "Alle drucken" darf gemischte Größen nicht in einen Auftrag legen: Der Browser
+// nimmt das Papierformat der ersten Seite, größere Labels würden abgeschnitten.
+test("sameLabelSize erkennt gemischte Größen und duldet Rundungen", () => {
+  const small = { pageWidth: 216, pageHeight: 114 };
+  assert.equal(LabelCrop.sameLabelSize([]), true);
+  assert.equal(LabelCrop.sameLabelSize([small]), true);
+  assert.equal(LabelCrop.sameLabelSize([small, { pageWidth: 216.2, pageHeight: 113.9 }]), true);
+  assert.equal(LabelCrop.sameLabelSize([small, { pageWidth: 283, pageHeight: 114 }]), false);
+  assert.equal(LabelCrop.sameLabelSize([small, { pageWidth: 216, pageHeight: 170 }]), false);
+});

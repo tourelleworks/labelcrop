@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.5";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.6";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -713,20 +713,21 @@ function onCropFieldInput() {
   });
 }
 
-// "Nur jetzt verwenden": als "Eigener Bereich" übernehmen, ohne einen Typ anzulegen.
-function applyCropForNow() {
+// "Nur für dieses Label": Der Ausschnitt hängt am Eintrag und nicht an den
+// Einstellungen. So bleibt die Erkennung für die anderen Labels im Stapel an,
+// und mit dem Eintrag verschwindet auch der Ausschnitt (nichts wird gespeichert).
+function applyCropToEntry() {
   const r = cropEdit.rect;
-  if (r === null) { return; }
+  const entry = cropEdit.entry;
+  if (r === null || entry === null) { return; }
   closeCropEditor();
-  dom.profile.value = "custom";
-  dom.sourceX.value = r.x.toFixed(1);
-  dom.sourceY.value = r.y.toFixed(1);
-  dom.sourceWidth.value = r.width.toFixed(1);
-  dom.sourceHeight.value = r.height.toFixed(1);
-  updateSettingsVisibility();
-  saveSettings();
-  scheduleReprocess();
-  showSettingsStatus("Eigener Bereich übernommen – zum Behalten unten als Label-Typ speichern.");
+  entry.cropOverride = { x: round1(r.x), y: round1(r.y), width: round1(r.width), height: round1(r.height) };
+  processEntry(entry);
+}
+
+function resetEntryCrop(entry) {
+  entry.cropOverride = null;
+  processEntry(entry);
 }
 
 function saveCropAsProfile() {
@@ -744,6 +745,8 @@ function saveCropAsProfile() {
       source: { x: round1(r.x), y: round1(r.y), width: round1(r.width), height: round1(r.height) },
       page: { width: round1(cropEdit.pageWidthMm), height: round1(cropEdit.pageHeightMm) },
     });
+    // Sonst würde ein älterer Ausschnitt dieses Labels den neuen Typ überdecken.
+    if (cropEdit.entry !== null) { cropEdit.entry.cropOverride = null; }
     closeCropEditor();
     afterProfileListChanged(profile.id, "Label-Typ „" + name + "“ gespeichert – gilt jetzt für alle Dateien.");
   } catch (error) {
@@ -807,6 +810,7 @@ function createEntry(name) {
     rotation: 0,             // /Rotate der Quellseite
     text: "",                // Text der Seite 1 für die Profil-Erkennung
     detected: null,          // erkanntes Profil oder null
+    cropOverride: null,      // eigener Ausschnitt nur für diese Datei (mm ab links oben) oder null
     result: null,            // { bytes, pages } aus cropper.js
     generation: 0,           // zählt Verarbeitungen; veraltete Ergebnisse werden verworfen
     sourceRenderTask: null,  // laufende pdf.js-Renderings, damit sie abgebrochen werden können
@@ -818,6 +822,7 @@ function createEntry(name) {
   element.querySelector(".result-print").addEventListener("click", function () { printEntry(entry); });
   element.querySelector(".result-save").addEventListener("click", function () { saveEntry(entry); });
   element.querySelector(".result-adjust").addEventListener("click", function () { openCropEditor(entry); });
+  element.querySelector(".result-reset-crop").addEventListener("click", function () { resetEntryCrop(entry); });
   // Das Vorschaubild selbst öffnet den Editor – der naheliegendste Griff.
   element.querySelector(".source-canvas").addEventListener("click", function () { openCropEditor(entry); });
   element.querySelector(".result-remove").addEventListener("click", function () { removeEntry(entry); });
@@ -847,13 +852,19 @@ async function loadSource(entry) {
   entry.detected = LabelCrop.detectProfile(LabelCropProfiles.allProfiles(), entry.mediaBox, entry.text);
 }
 
-// Welches Profil gilt für diesen Eintrag? Das gewählte, sonst das erkannte,
-// sonst das erste eingebaute – mit Hinweisen für die Karte.
+// Welches Profil gilt für diesen Eintrag? Der eigene Ausschnitt der Datei, sonst
+// das gewählte, sonst das erkannte, sonst das erste eingebaute – mit Hinweisen
+// für die Karte.
 function resolveProfile(entry, settings) {
   const warnings = [];
   let profile = settings.profile;
   let note = "";
-  if (profile === null) {
+  if (entry.cropOverride !== null) {
+    // Von Hand für genau diese Datei festgelegt: Das schlägt jede Einstellung,
+    // und die Warnungen zu Erkennung und Seitengröße wären hier nur Rauschen.
+    profile = LabelCropProfiles.singleUseProfile(entry.cropOverride);
+    note = "eigener Ausschnitt nur für dieses Label";
+  } else if (profile === null) {
     if (entry.detected !== null) {
       profile = entry.detected;
       note = "erkannt: " + profile.name;
@@ -943,6 +954,7 @@ function renderEntryInfo(entry, profileNote, pageInfo, settings, warnings) {
   }
   if (entry.pageCount > 1) { text += " · " + entry.pageCount + " Seiten"; }
   element.querySelector(".result-layout").textContent = text;
+  element.querySelector(".result-reset-crop").hidden = entry.cropOverride === null;
 
   const list = element.querySelector(".result-warnings");
   list.textContent = "";
@@ -1264,7 +1276,23 @@ async function saveMerged() {
   }
 }
 
+function readyLayouts() {
+  const layouts = [];
+  for (const entry of entries) {
+    if (entry.result !== null) {
+      for (const page of entry.result.pages) { layouts.push(page.layout); }
+    }
+  }
+  return layouts;
+}
+
 async function printAll() {
+  // Lieber nicht drucken als abgeschnittene Labels: Jedes Etikett kostet Geld.
+  if (!LabelCrop.sameLabelSize(readyLayouts())) {
+    showMessage("Die Labels haben unterschiedliche Größen und passen nicht in einen Druckauftrag. Bitte einzeln drucken oder ein festes Etikettenformat wählen.", "warn");
+    dom.message.scrollIntoView({ block: "center" });
+    return;
+  }
   try {
     const bytes = await mergedResults();
     if (bytes === null) { return; }
@@ -1429,7 +1457,7 @@ function bindEvents() {
     if (event.key === "Enter") { event.preventDefault(); saveCropAsProfile(); }
   });
   dom.cropCancel.addEventListener("click", closeCropEditor);
-  dom.cropApply.addEventListener("click", applyCropForNow);
+  dom.cropApply.addEventListener("click", applyCropToEntry);
   dom.cropSave.addEventListener("click", saveCropAsProfile);
   dom.cropEditor.addEventListener("close", function () {
     if (cropEdit.renderTask !== null) { cropEdit.renderTask.cancel(); }

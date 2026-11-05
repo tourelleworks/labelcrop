@@ -242,11 +242,26 @@ const LabelCropProfiles = (function () {
     return entry !== null && entry !== undefined && entry.userDefined === true;
   }
 
+  // Einmal-Profil für genau eine Datei (Ausschnitt-Editor, "Nur für dieses
+  // Label"). Bewusst nicht in allProfiles() und ohne Speicher: Es soll weder in
+  // der Auswahl auftauchen noch die Erkennung anderer Dateien beeinflussen.
+  function singleUseProfile(rect) {
+    return {
+      id: "single-use",
+      name: "Eigener Ausschnitt",
+      page: null,
+      source: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      trim: 0,
+      detect: null,
+    };
+  }
+
   return {
     PROFILES: PROFILES,
     TARGETS: TARGETS,
     STORAGE_KEY: STORAGE_KEY,
     load: load,
+    singleUseProfile: singleUseProfile,
     allProfiles: allProfiles,
     allTargets: allTargets,
     userProfiles: function () { return userProfiles.slice(); },
