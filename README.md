@@ -107,10 +107,10 @@ weiterer Code nötig.
 
 ## Deployment
 
-Repository `cdrcltr/repo_labelcrop`, GitHub Pages mit „Deploy from a branch“
+Repository `tourelleworks/labelcrop`, GitHub Pages mit „Deploy from a branch“
 (Branch `master`, Ordner `/ (root)`). `CNAME` bindet `labelcrop.tourelleworks.de`;
-dafür bei Cloudflare einen CNAME-Eintrag `labelcrop` auf `cdrcltr.github.io`
-anlegen (das Ziel ist immer `<github-benutzer>.github.io`, nicht der Repo-Name).
+dafür bei Cloudflare einen CNAME-Eintrag `labelcrop` auf `tourelleworks.github.io`
+anlegen (das Ziel ist immer `<github-konto>.github.io`, nicht der Repo-Name).
 
 Bei jedem Release hochzählen:
 
