@@ -214,15 +214,37 @@ const LabelCrop = (function () {
     return true;
   }
 
-  // Liefert das erste Profil, dessen Seitengröße und Textmuster passen, sonst null.
-  function detectProfile(profiles, mediaBox, text) {
+  function hasTextPatterns(profile) {
+    return Boolean(profile.detect && profile.detect.textAll);
+  }
+
+  // Sucht das passende Profil und sagt dazu, wie sicher der Treffer ist. Eigene
+  // Typen haben nur ihre Seitengröße: Sie passen auf jede fremde Datei dieser
+  // Größe, das ist also eine Vermutung und keine Erkennung.
+  // Ergebnis: { profile (erster Treffer oder null), certain, ambiguous }
+  function detectLabel(profiles, mediaBox, text) {
+    const matches = [];
     for (const profile of profiles) {
       if (profile.custom) { continue; }
+      // Ohne Seitengröße und ohne Textmuster gäbe es kein Merkmal: So ein Typ
+      // passte auf jede Datei und darf deshalb nur von Hand gewählt werden.
+      if (!profile.page && !hasTextPatterns(profile)) { continue; }
       if (pageSizeMatches(profile, mediaBox) && textMatches(profile, text)) {
-        return profile;
+        matches.push(profile);
       }
     }
-    return null;
+    if (matches.length === 0) {
+      return { profile: null, certain: false, ambiguous: false };
+    }
+    const certain = hasTextPatterns(matches[0]);
+    // Bei einem Texttreffer ist die Reihenfolge Absicht, siehe profiles.js.
+    const ambiguous = !certain && matches.length > 1;
+    return { profile: matches[0], certain: certain, ambiguous: ambiguous };
+  }
+
+  // Liefert das erste Profil, dessen Seitengröße und Textmuster passen, sonst null.
+  function detectProfile(profiles, mediaBox, text) {
+    return detectLabel(profiles, mediaBox, text).profile;
   }
 
   // Haben alle Seiten dieselbe Größe? Ein Druckauftrag aus dem Browser kennt nur
@@ -327,10 +349,12 @@ const LabelCrop = (function () {
     let profileText = "Automatisch erkennen";
     let detectionOff = false;
     if (profile !== null) {
-      profileText = profile.name;
+      // Jede feste Auswahl schaltet die Erkennung für alle Dateien ab. Das bleibt
+      // gespeichert und darf hinter der zugeklappten Karte nicht untergehen.
+      detectionOff = true;
+      profileText = profile.name + ", fest gewählt";
       if (profile.custom) {
         profileText = "Eigener Bereich (" + formatMm(profile.source.width) + " × " + formatMm(profile.source.height) + " mm), Erkennung aus";
-        detectionOff = true;
       }
     }
     let targetText = target.name;
@@ -473,6 +497,7 @@ const LabelCrop = (function () {
     pageSizeMatches: pageSizeMatches,
     textMatches: textMatches,
     detectProfile: detectProfile,
+    detectLabel: detectLabel,
     sameLabelSize: sameLabelSize,
     cropPdf: cropPdf,
     mergePdfs: mergePdfs,

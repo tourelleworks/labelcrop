@@ -129,6 +129,38 @@ test("Erkennung: eingebautes Post-Profil gewinnt, eigener Typ greift bei anderen
   // Ohne gespeicherte Seitengröße wird ein eigener Typ nie automatisch gewählt.
   const noPage = profiles.addProfile({ name: "Frei", source: { x: 0, y: 0, width: 50, height: 50 }, page: null });
   assert.equal(noPage.page, null);
+  assert.equal(LabelCrop.detectProfile(profiles.allProfiles(), letter, "irgendwas"), null);
+});
+
+// Eigene Typen haben nur ihre Seitengröße. Die Oberfläche muss das unterscheiden
+// können, sonst steht bei einem Hermes-Label "erkannt: DHL".
+test("detectLabel: Text ist sicher, Seitengröße nur eine Vermutung, mehrere Treffer sind unklar", () => {
+  profiles.load(fakeStorage(null));
+  const postText = "Erika Mustermann IM 09.09.26 1,80 MAX MUSTER";
+  const nothing = LabelCrop.detectLabel(profiles.allProfiles(), A4, "Rechnung Nr. 42");
+  assert.equal(nothing.profile, null);
+  assert.equal(nothing.certain, false);
+  assert.equal(nothing.ambiguous, false);
+
+  const page = { width: 210, height: 297 };
+  const source = { x: 5, y: 5, width: 100, height: 100 };
+  const dhl = profiles.addProfile({ name: "DHL", source: source, page: page });
+  const one = LabelCrop.detectLabel(profiles.allProfiles(), A4, "Rechnung Nr. 42");
+  assert.equal(one.profile.id, dhl.id);
+  assert.equal(one.certain, false);
+  assert.equal(one.ambiguous, false);
+
+  profiles.addProfile({ name: "Hermes", source: source, page: page });
+  const two = LabelCrop.detectLabel(profiles.allProfiles(), A4, "Hermes Schein");
+  assert.equal(two.profile.id, dhl.id);
+  assert.equal(two.certain, false);
+  assert.equal(two.ambiguous, true);
+
+  // Zwei eingebaute Profile passen auf eine Internetmarke; das ist Absicht und nicht unklar.
+  const post = LabelCrop.detectLabel(profiles.allProfiles(), A4, postText);
+  assert.equal(post.profile.id, "post-internetmarke-ebay");
+  assert.equal(post.certain, true);
+  assert.equal(post.ambiguous, false);
 });
 
 // "Nur für dieses Label" darf nichts hinterlassen: keine Auswahl, kein Speicher,

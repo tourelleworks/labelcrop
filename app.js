@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.7";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.8";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -467,12 +467,25 @@ function round1(value) {
   return Math.round(value * 10) / 10;
 }
 
+// Neue und gelöschte Typen ändern, was auf die schon geladenen Labels passt.
+function refreshEntriesAfterProfileChange() {
+  for (const entry of entries) {
+    if (entry.mediaBox !== null) { detectEntry(entry); }
+    if (entry.assignedProfileId !== null && LabelCropProfiles.findProfile(entry.assignedProfileId) === null) {
+      entry.assignedProfileId = null;
+    }
+  }
+}
+
 function afterProfileListChanged(selectedId, statusText) {
+  // Eine ältere Meldung zum Speichern stimmt nach dieser Änderung nicht mehr.
+  hideMessage();
   fillProfileSelect(selectedId);
   // Der gespeicherte Typ soll gelten; ein aktiver "Eigener Bereich" würde ihn überdecken.
   dom.useCustomArea.checked = false;
   updateSettingsVisibility();
   saveSettings();
+  refreshEntriesAfterProfileChange();
   scheduleReprocess();
   showSettingsStatus(statusText);
 }
@@ -795,9 +808,37 @@ function applyCropToEntry() {
 
 function resetEntryCrop(entry) {
   entry.cropOverride = null;
+  entry.assignedProfileId = null;
   processEntry(entry);
 }
 
+// Sagt nach dem Speichern, was der neue Typ für die übrigen Labels bedeutet.
+// Muss nach refreshEntriesAfterProfileChange() laufen, damit die Erkennung den Typ schon kennt.
+function announceSavedProfile(profile, entry) {
+  const start = "„" + profile.name + "“ gespeichert und für dieses Label übernommen. ";
+  const useAlways = "Soll „" + profile.name + "“ immer gelten, wähle den Typ unter „Ändern“ fest aus.";
+  const detection = entry.detection;
+  let text = "";
+  let mustRead = true;
+  if (readSettings().profile !== null) {
+    text = start + "Die übrigen Labels bleiben bei der festen Auswahl unter „Ändern“.";
+  } else if (detection.certain) {
+    text = start + "Labels, die als „" + detection.profile.name + "“ erkannt werden, behalten dessen Ausschnitt. " + useAlways;
+  } else if (detection.profile !== null && detection.profile.id !== profile.id) {
+    text = start + "Bei der Erkennung bleibt der zuerst angelegte Typ „" + detection.profile.name + "“ vorn; betroffene Labels zeigen einen Prüfhinweis.";
+  } else {
+    text = start + "Nicht erkannte Labels dieser Seitengröße nutzen ihn ab jetzt.";
+    mustRead = false;
+  }
+  showMessage(text, "info");
+  // Die Meldung steht oben, das Label vielleicht weit unten im Stapel. Weggescrollt
+  // wird nur, wenn der Typ anders wirkt, als man nach dem Speichern erwartet.
+  if (mustRead) { dom.message.scrollIntoView({ block: "center" }); }
+}
+
+// Speichern ändert die Auswahl nicht: Sonst gälte der neue Typ fest für alle
+// Dateien, auch für die, die eigentlich erkannt würden, und das auch nach dem
+// Neuladen. Das Label, an dem gespeichert wurde, bekommt ihn trotzdem sofort.
 function saveCropAsProfile() {
   const r = cropEdit.rect;
   if (r === null) { return; }
@@ -813,10 +854,18 @@ function saveCropAsProfile() {
       source: { x: round1(r.x), y: round1(r.y), width: round1(r.width), height: round1(r.height) },
       page: { width: round1(cropEdit.pageWidthMm), height: round1(cropEdit.pageHeightMm) },
     });
-    // Sonst würde ein älterer Ausschnitt dieses Labels den neuen Typ überdecken.
-    if (cropEdit.entry !== null) { cropEdit.entry.cropOverride = null; }
+    const entry = cropEdit.entry;
     closeCropEditor();
-    afterProfileListChanged(profile.id, "Label-Typ „" + name + "“ gespeichert – gilt jetzt für alle Dateien.");
+    fillProfileSelect(dom.profile.value);
+    refreshEntriesAfterProfileChange();
+    if (entry !== null) {
+      // Sonst würde ein älterer Ausschnitt dieses Labels den neuen Typ überdecken.
+      entry.cropOverride = null;
+      entry.assignedProfileId = profile.id;
+      announceSavedProfile(profile, entry);
+    }
+    updateSettingsVisibility();
+    scheduleReprocess();
   } catch (error) {
     dom.cropHint.textContent = error.message;
   }
@@ -879,8 +928,9 @@ function createEntry(name) {
     mediaBox: null,          // aus pdf-lib: {x, y, width, height} in pt
     rotation: 0,             // /Rotate der Quellseite
     text: "",                // Text der Seite 1 für die Profil-Erkennung
-    detected: null,          // erkanntes Profil oder null
+    detection: { profile: null, certain: false, ambiguous: false },   // Ergebnis von detectLabel()
     cropOverride: null,      // eigener Ausschnitt nur für diese Datei (mm ab links oben) oder null
+    assignedProfileId: null, // im Editor aus dieser Datei gespeicherter Label-Typ oder null
     result: null,            // { bytes, pages } aus cropper.js
     generation: 0,           // zählt Verarbeitungen; veraltete Ergebnisse werden verworfen
     sourceRenderTask: null,  // laufende pdf.js-Renderings, damit sie abgebrochen werden können
@@ -918,8 +968,12 @@ async function loadSource(entry) {
     if (item.str) { parts.push(item.str); }
   }
   entry.text = parts.join(" ");
-  // Eingebaute Profile zuerst, dann eigene Typen (nur über die Seitengröße).
-  entry.detected = LabelCrop.detectProfile(LabelCropProfiles.allProfiles(), entry.mediaBox, entry.text);
+  detectEntry(entry);
+}
+
+// Eingebaute Profile zuerst, dann eigene Typen (nur über die Seitengröße).
+function detectEntry(entry) {
+  entry.detection = LabelCrop.detectLabel(LabelCropProfiles.allProfiles(), entry.mediaBox, entry.text);
 }
 
 // Welches Profil gilt für diesen Eintrag? Der eigene Ausschnitt der Datei, sonst
@@ -934,10 +988,24 @@ function resolveProfile(entry, settings) {
     // und die Warnungen zu Erkennung und Seitengröße wären hier nur Rauschen.
     profile = LabelCropProfiles.singleUseProfile(entry.cropOverride);
     note = "eigener Ausschnitt nur für dieses Label";
+  } else if (entry.assignedProfileId !== null) {
+    // Aus genau diesem Label gespeichert: Es soll so bleiben wie im Editor,
+    // egal was die Erkennung oder die Auswahl für den Rest des Stapels sagt.
+    profile = LabelCropProfiles.findProfile(entry.assignedProfileId);
+    note = "Label-Typ: " + profile.name + " (hier gespeichert)";
   } else if (profile === null) {
-    if (entry.detected !== null) {
-      profile = entry.detected;
-      note = "erkannt: " + profile.name;
+    if (entry.detection.profile !== null) {
+      profile = entry.detection.profile;
+      if (entry.detection.certain) {
+        note = "erkannt: " + profile.name;
+      } else {
+        note = "vermutlich: " + profile.name;
+      }
+      // Bei nur einem eigenen Typ bleibt es beim "vermutlich": Wer ihn täglich
+      // nutzt, bekäme sonst auf jedem Label eine Warnung und läse sie nicht mehr.
+      if (entry.detection.ambiguous) {
+        warnings.push("Mehrere eigene Label-Typen passen zu dieser Seitengröße, genommen wurde der zuerst angelegte. Bitte in der Vorschau prüfen – ein anderer lässt sich unter „Ändern“ wählen.");
+      }
     } else {
       profile = LabelCropProfiles.PROFILES[0];
       note = "nicht erkannt, angenommen: " + profile.name;
@@ -946,11 +1014,11 @@ function resolveProfile(entry, settings) {
   } else {
     note = "Label-Typ: " + profile.name;
     if (!LabelCrop.pageSizeMatches(profile, entry.mediaBox)) {
-      warnings.push("Die Seitengröße passt nicht zum Profil – der Ausschnitt sitzt womöglich falsch.");
+      warnings.push("Die Seitengröße passt nicht zum Label-Typ – der Ausschnitt sitzt womöglich falsch.");
     }
   }
   if (entry.rotation !== 0) {
-    warnings.push("Die Quellseite ist um " + entry.rotation + "° gedreht; die Profil-Koordinaten könnten nicht passen.");
+    warnings.push("Die Quellseite ist um " + entry.rotation + "° gedreht; die Maße des Label-Typs könnten nicht passen.");
   }
   return { profile: profile, note: note, warnings: warnings };
 }
@@ -1024,7 +1092,7 @@ function renderEntryInfo(entry, profileNote, pageInfo, settings, warnings) {
   }
   if (entry.pageCount > 1) { text += " · " + entry.pageCount + " Seiten"; }
   element.querySelector(".result-layout").textContent = text;
-  element.querySelector(".result-reset-crop").hidden = entry.cropOverride === null;
+  element.querySelector(".result-reset-crop").hidden = entry.cropOverride === null && entry.assignedProfileId === null;
 
   const list = element.querySelector(".result-warnings");
   list.textContent = "";

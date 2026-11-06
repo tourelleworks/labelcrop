@@ -246,8 +246,8 @@ test("describeSelection nennt Auswahl und meldet ausgeschaltete Erkennung", () =
   assert.equal(auto.detectionOff, false);
 
   const named = LabelCrop.describeSelection({ name: "DHL" }, brother);
-  assert.equal(named.profile, "DHL");
-  assert.equal(named.detectionOff, false);
+  assert.equal(named.profile, "DHL, fest gewählt");
+  assert.equal(named.detectionOff, true);
 
   const area = { name: "Eigener Bereich …", custom: true, source: { x: 0, y: 0, width: 76.2, height: 40 } };
   const custom = LabelCrop.describeSelection(area, { name: "Eigene Größe …", custom: true, width: 100, height: 50 });
