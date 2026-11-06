@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.9";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.10";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -931,6 +931,7 @@ function createEntry(name) {
     detection: { profile: null, certain: false, ambiguous: false },   // Ergebnis von detectLabel()
     cropOverride: null,      // eigener Ausschnitt nur für diese Datei (mm ab links oben) oder null
     assignedProfileId: null, // im Editor aus dieser Datei gespeicherter Label-Typ oder null
+    needsCheck: false,       // Karte zeigt eine Warnung oder einen Fehler
     result: null,            // { bytes, pages } aus cropper.js
     generation: 0,           // zählt Verarbeitungen; veraltete Ergebnisse werden verworfen
     resultRenderTask: null,  // laufendes pdf.js-Rendering, damit es abgebrochen werden kann
@@ -1100,6 +1101,7 @@ function renderEntryInfo(entry, profileNote, pageInfo, settings, warnings) {
     list.appendChild(item);
   }
   list.hidden = warnings.length === 0;
+  entry.needsCheck = warnings.length > 0;
 }
 
 function previewScale() {
@@ -1370,6 +1372,23 @@ function readyLayouts() {
   return layouts;
 }
 
+// Im Stapel fällt eine gelbe Karte weit unten nicht auf. Wer abbricht, landet
+// gleich bei der ersten betroffenen Karte, statt sie suchen zu müssen.
+function confirmPrintDespiteChecks() {
+  const batch = batchCounts();
+  if (batch.check === 0) { return true; }
+  let question = batch.check + " Labels sollten geprüft werden (gelb markiert). Trotzdem alle drucken?";
+  if (batch.check === 1) { question = "1 Label sollte geprüft werden (gelb markiert). Trotzdem alle drucken?"; }
+  if (window.confirm(question)) { return true; }
+  for (const entry of entries) {
+    if (entry.needsCheck) {
+      entry.element.scrollIntoView({ block: "center" });
+      break;
+    }
+  }
+  return false;
+}
+
 async function printAll() {
   // Lieber nicht drucken als abgeschnittene Labels: Jedes Etikett kostet Geld.
   if (!LabelCrop.sameLabelSize(readyLayouts())) {
@@ -1377,6 +1396,7 @@ async function printAll() {
     dom.message.scrollIntoView({ block: "center" });
     return;
   }
+  if (!confirmPrintDespiteChecks()) { return; }
   try {
     const bytes = await mergedResults();
     if (bytes === null) { return; }
@@ -1421,16 +1441,23 @@ function clearAll() {
   hideMessage();
 }
 
+// Gezählt werden Labels, nicht Dateien: Eine PDF kann mehrere Seiten haben.
+function batchCounts() {
+  const counts = { total: 0, ready: 0, check: 0 };
+  for (const entry of entries) {
+    const labels = Math.max(1, entry.pageCount);
+    counts.total += labels;
+    if (entry.result !== null) { counts.ready += labels; }
+    if (entry.needsCheck) { counts.check += labels; }
+  }
+  return counts;
+}
+
 function updateResultsBar() {
   dom.resultsBar.hidden = entries.length === 0;
-  let ready = 0;
-  for (const entry of entries) {
-    if (entry.result !== null) { ready += 1; }
-  }
-  let text = entries.length + " Datei";
-  if (entries.length !== 1) { text += "en"; }
-  if (ready !== entries.length) { text += " (" + ready + " fertig)"; }
-  dom.resultCount.textContent = text;
+  const batch = batchCounts();
+  const ready = batch.ready;
+  dom.resultCount.textContent = LabelCrop.describeBatch(batch.total, batch.ready, batch.check);
   dom.printAll.disabled = ready === 0;
   dom.saveAll.disabled = ready === 0;
   dom.saveMerged.disabled = ready === 0;
@@ -1454,6 +1481,7 @@ function setEntryStatus(entry, text) {
 
 function setEntryError(entry, text) {
   entry.result = null;
+  entry.needsCheck = true;
   entry.element.classList.add("has-error");
   setEntryStatus(entry, text);
   updateResultsBar();

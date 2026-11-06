@@ -142,14 +142,16 @@
     </section>
 
     <section class="results" id="results">
+      <div id="result-list" class="result-list"></div>
+      <!-- Steht unter der Liste und klebt am Fensterrand: Bei einem langen Stapel
+           bleibt der Druck-Knopf sichtbar, egal bei welcher Karte man gerade ist. -->
       <div class="results-bar" id="results-bar" hidden>
         <span class="count" id="result-count"></span>
         <button type="button" class="btn primary" id="print-all">Alle drucken</button>
-        <button type="button" class="btn" id="save-all">Alle speichern</button>
-        <button type="button" class="btn" id="save-merged">Alle in einer PDF</button>
+        <button type="button" class="btn" id="save-merged">Als eine PDF speichern</button>
+        <button type="button" class="btn link" id="save-all">Alle speichern</button>
         <button type="button" class="btn link" id="clear-all">Liste leeren</button>
       </div>
-      <div id="result-list" class="result-list"></div>
     </section>
 
     <details class="card hints">

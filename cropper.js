@@ -247,6 +247,15 @@ const LabelCrop = (function () {
     return detectLabel(profiles, mediaBox, text).profile;
   }
 
+  // Text der Stapel-Leiste, z. B. "8 Labels · 2 prüfen".
+  function describeBatch(total, ready, check) {
+    let text = total + " Labels";
+    if (total === 1) { text = "1 Label"; }
+    if (ready !== total) { text += " · " + ready + " fertig"; }
+    if (check > 0) { text += " · " + check + " prüfen"; }
+    return text;
+  }
+
   // Haben alle Seiten dieselbe Größe? Ein Druckauftrag aus dem Browser kennt nur
   // ein Papierformat; abweichende Labels würden darin abgeschnitten.
   // Eine Toleranz von 0,5 pt fängt Rundungen ab, echte Unterschiede sind größer.
@@ -498,6 +507,7 @@ const LabelCrop = (function () {
     textMatches: textMatches,
     detectProfile: detectProfile,
     detectLabel: detectLabel,
+    describeBatch: describeBatch,
     sameLabelSize: sameLabelSize,
     cropPdf: cropPdf,
     mergePdfs: mergePdfs,

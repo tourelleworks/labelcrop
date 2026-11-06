@@ -238,6 +238,13 @@ test("sameLabelSize erkennt gemischte Größen und duldet Rundungen", () => {
 
 // Die Einstellungszeile ist bei zugeklappter Karte das Einzige, was man sieht.
 // Ein aktiver "Eigener Bereich" muss dort deshalb eindeutig auftauchen.
+test("describeBatch zählt Labels und nennt nur, was noch zu tun ist", () => {
+  assert.equal(LabelCrop.describeBatch(8, 8, 0), "8 Labels");
+  assert.equal(LabelCrop.describeBatch(8, 8, 2), "8 Labels · 2 prüfen");
+  assert.equal(LabelCrop.describeBatch(8, 5, 1), "8 Labels · 5 fertig · 1 prüfen");
+  assert.equal(LabelCrop.describeBatch(1, 1, 0), "1 Label");
+});
+
 test("describeSelection nennt Auswahl und meldet ausgeschaltete Erkennung", () => {
   const brother = { id: "b", name: "Brother 62 mm", width: 62, height: null };
   const auto = LabelCrop.describeSelection(null, brother);
