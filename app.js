@@ -7,14 +7,14 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.8";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.9";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
 pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
 
 const PREVIEW_PX_PER_MM = 5;    // Vorschau-Auflösung in CSS-Pixeln je Millimeter
-const PREVIEW_CONTEXT_MM = 8;   // so viel Umgebung um den Ausschnitt zeigt die Original-Vorschau
+const PREVIEW_MAX_HEIGHT_PX = 220;   // Bei oft mehr als 5 Labels zählt, wie viele Karten aufs Mal passen
 const AUTO_PROFILE_ID = "auto";
 const DEFAULT_MARGIN_MM = 2;    // Vorgabe bei festen Formaten: Drucker lassen den Rand meist frei
 // pdf.js zeichnet mit intent "display" in requestAnimationFrame-Häppchen, die
@@ -933,8 +933,7 @@ function createEntry(name) {
     assignedProfileId: null, // im Editor aus dieser Datei gespeicherter Label-Typ oder null
     result: null,            // { bytes, pages } aus cropper.js
     generation: 0,           // zählt Verarbeitungen; veraltete Ergebnisse werden verworfen
-    sourceRenderTask: null,  // laufende pdf.js-Renderings, damit sie abgebrochen werden können
-    resultRenderTask: null,
+    resultRenderTask: null,  // laufendes pdf.js-Rendering, damit es abgebrochen werden kann
     element: element,
   };
   nextEntryId += 1;
@@ -944,7 +943,7 @@ function createEntry(name) {
   element.querySelector(".result-adjust").addEventListener("click", function () { openCropEditor(entry); });
   element.querySelector(".result-reset-crop").addEventListener("click", function () { resetEntryCrop(entry); });
   // Das Vorschaubild selbst öffnet den Editor – der naheliegendste Griff.
-  element.querySelector(".source-canvas").addEventListener("click", function () { openCropEditor(entry); });
+  element.querySelector(".result-canvas").addEventListener("click", function () { openCropEditor(entry); });
   element.querySelector(".result-remove").addEventListener("click", function () { removeEntry(entry); });
   return entry;
 }
@@ -1048,7 +1047,6 @@ async function processEntry(entry) {
       warnings.push("Der Ausschnitt passt nicht auf das Etikett und würde abgeschnitten – „Einpassen“ wählen oder ein größeres Format nehmen.");
     }
     renderEntryInfo(entry, profileNote, first, settings, warnings);
-    await drawSourcePreview(entry, first.box, generation);
     await drawResultPreview(entry, generation);
     if (generation === entry.generation) { setEntryStatus(entry, ""); }
   } catch (error) {
@@ -1127,68 +1125,16 @@ function isRenderCancelled(error) {
   return error !== null && typeof error === "object" && error.name === "RenderingCancelledException";
 }
 
-// Zeigt den Ausschnitt im Original samt Umgebung: außerhalb des Bereichs wird
-// abgedunkelt. So sieht man sofort, ob etwas Wichtiges abgeschnitten würde.
-async function drawSourcePreview(entry, box, generation) {
-  const scale = previewScale();
-  const context = LabelCrop.mmToPt(PREVIEW_CONTEXT_MM);
-  const media = entry.mediaBox;
-  const regionLeft = Math.max(media.x, box.left - context);
-  const regionRight = Math.min(media.x + media.width, box.right + context);
-  const regionTop = Math.min(media.y + media.height, box.top + context);
-  const regionBottom = Math.max(media.y, box.bottom - context);
-
-  // Viewport so verschieben, dass die linke obere Ecke der Region bei (0, 0) liegt;
-  // dann reicht ein Canvas in Regionsgröße statt der ganzen A4-Seite.
-  const base = entry.page.getViewport({ scale: scale });
-  const origin = base.convertToViewportPoint(regionLeft, regionTop);
-  const viewport = entry.page.getViewport({ scale: scale, offsetX: -origin[0], offsetY: -origin[1] });
-
-  const widthCss = (regionRight - regionLeft) * scale;
-  const heightCss = (regionTop - regionBottom) * scale;
-  const canvas = entry.element.querySelector(".source-canvas");
-
-  if (entry.sourceRenderTask !== null) { entry.sourceRenderTask.cancel(); }
-  const prepared = prepareCanvas(canvas, widthCss, heightCss);
-  const ctx = prepared.ctx;
-  const dpr = prepared.dpr;
-  const task = entry.page.render({ canvasContext: ctx, viewport: viewport, transform: [dpr, 0, 0, dpr, 0, 0], intent: RENDER_INTENT });
-  entry.sourceRenderTask = task;
-  try {
-    await task.promise;
-  } catch (error) {
-    if (isRenderCancelled(error)) { return; }
-    throw error;
-  } finally {
-    if (entry.sourceRenderTask === task) { entry.sourceRenderTask = null; }
-  }
-  if (generation !== entry.generation) { return; }
-
-  const topLeft = viewport.convertToViewportPoint(box.left, box.top);
-  const bottomRight = viewport.convertToViewportPoint(box.right, box.bottom);
-  const boxWidth = bottomRight[0] - topLeft[0];
-  const boxHeight = bottomRight[1] - topLeft[1];
-  ctx.save();
-  ctx.scale(dpr, dpr);
-  ctx.beginPath();
-  ctx.rect(0, 0, widthCss, heightCss);
-  ctx.rect(topLeft[0], topLeft[1], boxWidth, boxHeight);
-  ctx.fillStyle = "rgba(15, 27, 51, 0.45)";
-  ctx.fill("evenodd");
-  ctx.setLineDash([6, 4]);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "#0f1b33";
-  ctx.strokeRect(topLeft[0], topLeft[1], boxWidth, boxHeight);
-  ctx.restore();
-}
-
 // Zeichnet die erste Seite der erzeugten PDF – das, was der Drucker bekommt.
 async function drawResultPreview(entry, generation) {
   const doc = await pdfjsLib.getDocument({ data: new Uint8Array(entry.result.bytes) }).promise;
   try {
     if (generation !== entry.generation) { return; }
     const page = await doc.getPage(1);
-    const viewport = page.getViewport({ scale: previewScale() });
+    // Hohe Formate (z. B. 100 × 150 mm) nur verkleinert zeigen, sonst wäre eine Karte höher als der Bildschirm.
+    const pageHeightPt = page.getViewport({ scale: 1 }).height;
+    const scale = Math.min(previewScale(), PREVIEW_MAX_HEIGHT_PX / pageHeightPt);
+    const viewport = page.getViewport({ scale: scale });
     const canvas = entry.element.querySelector(".result-canvas");
 
     if (entry.resultRenderTask !== null) { entry.resultRenderTask.cancel(); }

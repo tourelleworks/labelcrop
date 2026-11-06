@@ -172,7 +172,13 @@
 
   <!-- Vorlage für eine Ergebnis-Karte; app.js klont sie je Datei. -->
   <template id="result-template">
+    <!-- Nur das Ergebnis: Es ist das, was gedruckt wird. Das Original zeigt der Editor. -->
     <article class="result card">
+      <figure class="result-preview">
+        <canvas class="result-canvas" title="Anklicken, um den Ausschnitt zu ändern"></canvas>
+        <figcaption class="result-caption">Ergebnis</figcaption>
+      </figure>
+      <div class="result-body">
       <header class="result-head">
         <div>
           <h3 class="result-name"></h3>
@@ -185,16 +191,6 @@
       </header>
       <p class="result-status" hidden></p>
       <ul class="result-warnings" hidden></ul>
-      <div class="result-previews">
-        <figure>
-          <canvas class="source-canvas" title="Anklicken, um den Ausschnitt zu ändern"></canvas>
-          <figcaption>Ausschnitt im Original (abgedunkelt = wird entfernt) – anklicken zum Ändern</figcaption>
-        </figure>
-        <figure>
-          <canvas class="result-canvas"></canvas>
-          <figcaption class="result-caption">Ergebnis</figcaption>
-        </figure>
-      </div>
       <footer class="result-foot">
         <span class="result-layout"></span>
         <span class="result-foot-actions">
@@ -203,6 +199,7 @@
           <button type="button" class="btn link result-remove">Entfernen</button>
         </span>
       </footer>
+      </div>
     </article>
   </template>
 

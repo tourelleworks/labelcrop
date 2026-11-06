@@ -460,7 +460,7 @@ body.dragging .dropzone {
 }
 
 /* Das Vorschaubild auf der Karte ist der Einstieg in den Editor. */
-.result-previews .source-canvas {
+.result-preview .result-canvas {
   cursor: pointer;
 }
 
@@ -647,6 +647,22 @@ body.dragging .dropzone {
   gap: 1rem;
 }
 
+/* Vorschau links, alles andere rechts: Die Karte ist nur so hoch wie das Etikett,
+   damit ein Stapel nicht zum langen Scrollen wird. */
+.result {
+  display: grid;
+  grid-template-columns: fit-content(50%) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .result {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.9rem;
+  }
+}
+
 .result-head {
   display: flex;
   justify-content: space-between;
@@ -686,20 +702,7 @@ body.dragging .dropzone {
   font-size: 0.9rem;
 }
 
-.result-previews {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-@media (max-width: 40rem) {
-  .result-previews {
-    grid-template-columns: 1fr;
-  }
-}
-
-.result-previews figure {
+.result-preview {
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -707,9 +710,8 @@ body.dragging .dropzone {
   min-width: 0;
 }
 
-/* Beide Vorschauen nutzen denselben Maßstab (5 px je mm); app.js setzt die
-   CSS-Breite. max-width sorgt dafür, dass große Etiketten in die Spalte passen. */
-.result-previews canvas {
+/* app.js setzt die CSS-Breite. max-width sorgt dafür, dass große Etiketten in die Spalte passen. */
+.result-preview canvas {
   max-width: 100%;
   height: auto;
   border: 1px solid var(--line);
@@ -717,7 +719,7 @@ body.dragging .dropzone {
   background: var(--surface);
 }
 
-.result-previews figcaption {
+.result-preview figcaption {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
