@@ -666,6 +666,35 @@ body.dragging .dropzone {
   }
 }
 
+/* Eine eigene Zeile über den Knöpfen, damit die Frage nach dem Druckdialog ins Auge fällt. */
+.print-followup {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.print-followup[hidden] {
+  display: none;
+}
+
+/* Frage und beide Antworten sollen am Handy in eine Zeile passen. */
+@media (max-width: 40rem) {
+  .print-followup {
+    gap: 0.3rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .print-followup .btn {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
 .results-bar .count {
   margin-right: auto;
   color: var(--text);

@@ -238,6 +238,13 @@ test("sameLabelSize erkennt gemischte Größen und duldet Rundungen", () => {
 
 // Die Einstellungszeile ist bei zugeklappter Karte das Einzige, was man sieht.
 // Ein aktiver "Eigener Bereich" muss dort deshalb eindeutig auftauchen.
+test("sameBytes vergleicht den Inhalt", () => {
+  const a = new Uint8Array([1, 2, 3]);
+  assert.equal(LabelCrop.sameBytes(a, new Uint8Array([1, 2, 3])), true);
+  assert.equal(LabelCrop.sameBytes(a, new Uint8Array([1, 2, 4])), false);
+  assert.equal(LabelCrop.sameBytes(a, new Uint8Array([1, 2])), false);
+});
+
 test("describeBatch zählt Labels und nennt nur, was noch zu tun ist", () => {
   assert.equal(LabelCrop.describeBatch(8, 8, 0), "8 Labels");
   assert.equal(LabelCrop.describeBatch(8, 8, 2), "8 Labels · 2 prüfen");

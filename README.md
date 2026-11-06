@@ -29,15 +29,19 @@ echte MediaBox in Labelgröße; Text und Data-Matrix-Code bleiben vektoriell.
 - **Ausschnitt ändern:** Klick aufs Vorschaubild oder „Ausschnitt ändern“ zeigt
   die ganze Seite; Rahmen verschieben, an Ecken und Kanten ziehen, das Ergebnis
   daneben folgt live; nur für dieses Label übernehmen oder als eigenen Label-Typ
-  speichern – der gilt dann für alle Dateien und wird bei gleicher Seitengröße
-  automatisch vorgeschlagen; eigene Etikettenformate ebenso; beides lässt sich
-  wieder löschen
+  speichern – nicht erkannte Labels gleicher Seitengröße nutzen ihn dann als
+  Vermutung, dauerhaft gilt er nach fester Auswahl; eigene Etikettenformate
+  ebenso; beides lässt sich wieder löschen
 - **Etikettenformat:** 100 × 150 mm Thermodrucker, Brother, DYMO, A6,
   Endlosrolle, eigene Größe; dazu Drehung 0/90/180/270° oder automatisch,
   Einpassen oder 100 %, Lage zentriert oder oben bündig, Rand – wird gemerkt;
   eingerichtet schrumpfen die Einstellungen auf eine Zeile
 - **Testdruck** zum Kalibrieren: Rahmen, Pfeil zum Seitenanfang, 50-mm-Linien
-- **Vorschau** des Ausschnitts im Original und des Ergebnisses
+- **Vorschau** des Ergebnisses auf jeder Karte, das Original zeigt der Editor
+- **Stapel-Leiste** am Fensterrand: Anzahl, „Alle drucken“, „Als eine PDF
+  speichern“; fragt vor dem Druck nach, wenn Labels zu prüfen sind, und danach,
+  ob die Liste geleert werden soll
+- **Doppelte Dateien** werden in der Liste markiert
 - **Drucken** über den Browser-Druckdialog – das Papierformat ist dabei schon
   die Etikettengröße (jede Seite wird mit 600 dpi gerastert und als HTML-Seite
   mit `@page`-Größe gedruckt); oder **speichern**, einzeln oder alle Labels

@@ -146,6 +146,11 @@
       <!-- Steht unter der Liste und klebt am Fensterrand: Bei einem langen Stapel
            bleibt der Druck-Knopf sichtbar, egal bei welcher Karte man gerade ist. -->
       <div class="results-bar" id="results-bar" hidden>
+        <div class="print-followup" id="print-followup" hidden>
+          <span>Alles gedruckt?</span>
+          <button type="button" class="btn primary" id="followup-clear">Liste leeren</button>
+          <button type="button" class="btn link" id="followup-keep">Noch nicht</button>
+        </div>
         <span class="count" id="result-count"></span>
         <button type="button" class="btn primary" id="print-all">Alle drucken</button>
         <button type="button" class="btn" id="save-merged">Als eine PDF speichern</button>

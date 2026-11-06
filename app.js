@@ -7,7 +7,7 @@
 // hochgeladen, denn Versandetiketten enthalten Adressen.
 // ============================================================
 
-const APP_VERSION = "0.10";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
+const APP_VERSION = "0.11";   // bei jedem Release hochzählen (CACHE_VERSION im Service Worker ebenso)
 
 // pdf.js zeichnet nur die Vorschau; das Zuschneiden macht pdf-lib in cropper.js.
 // Der Worker parst im Hintergrund, damit die Oberfläche flüssig bleibt.
@@ -113,6 +113,9 @@ const dom = {
   saveAll: byId("save-all"),
   saveMerged: byId("save-merged"),
   clearAll: byId("clear-all"),
+  printFollowup: byId("print-followup"),
+  followupClear: byId("followup-clear"),
+  followupKeep: byId("followup-keep"),
   testPrint: byId("test-print"),
   testPrintSave: byId("test-print-save"),
   resetSettings: byId("reset-settings"),
@@ -884,6 +887,8 @@ async function addFiles(fileList) {
   const files = Array.from(fileList);
   const rejected = [];
   hideMessage();
+  // "Liste leeren" träfe jetzt auch die neuen, noch nicht gedruckten Dateien.
+  dom.printFollowup.hidden = true;
   for (const file of files) {
     if (!isPdf(file)) {
       rejected.push(file.name);
@@ -898,6 +903,30 @@ async function addFiles(fileList) {
   }
 }
 
+// Verglichen wird der Inhalt, nicht der Name: Ein zweimal geladenes Label heißt
+// oft "label (1).pdf". Markiert statt entfernt, denn vielleicht ist es Absicht.
+function findDuplicateName(entry) {
+  for (const other of entries) {
+    if (other === entry) { return null; }   // nur Karten weiter oben zählen
+    if (other.sourceBytes !== null && LabelCrop.sameBytes(other.sourceBytes, entry.sourceBytes)) {
+      return other.name;
+    }
+  }
+  return null;
+}
+
+// Fliegt die erste Kopie raus, ist die zweite kein Duplikat mehr.
+function refreshDuplicates() {
+  for (const entry of entries) {
+    if (entry.sourceBytes === null) { continue; }
+    const duplicateOf = findDuplicateName(entry);
+    if (duplicateOf !== entry.duplicateOf) {
+      entry.duplicateOf = duplicateOf;
+      processEntry(entry);
+    }
+  }
+}
+
 async function addFile(file) {
   const entry = createEntry(file.name);
   entries.push(entry);
@@ -907,6 +936,7 @@ async function addFile(file) {
   try {
     const buffer = await file.arrayBuffer();
     entry.sourceBytes = new Uint8Array(buffer);
+    entry.duplicateOf = findDuplicateName(entry);
     await loadSource(entry);
     await processEntry(entry);
   } catch (error) {
@@ -932,6 +962,7 @@ function createEntry(name) {
     cropOverride: null,      // eigener Ausschnitt nur für diese Datei (mm ab links oben) oder null
     assignedProfileId: null, // im Editor aus dieser Datei gespeicherter Label-Typ oder null
     needsCheck: false,       // Karte zeigt eine Warnung oder einen Fehler
+    duplicateOf: null,       // Name der gleichen Datei weiter oben in der Liste oder null
     result: null,            // { bytes, pages } aus cropper.js
     generation: 0,           // zählt Verarbeitungen; veraltete Ergebnisse werden verworfen
     resultRenderTask: null,  // laufendes pdf.js-Rendering, damit es abgebrochen werden kann
@@ -1036,6 +1067,9 @@ async function processEntry(entry) {
   const profile = resolved.profile;
   const profileNote = resolved.note;
   const warnings = resolved.warnings;
+  if (entry.duplicateOf !== null) {
+    warnings.push("Diese Datei liegt schon in der Liste („" + entry.duplicateOf + "“) und würde doppelt gedruckt.");
+  }
 
   setEntryStatus(entry, "Wird verarbeitet …");
   try {
@@ -1241,7 +1275,9 @@ function createPrintFrame() {
   return frame;
 }
 
-function printHtml(html) {
+// Beide Druckwege rufen onPrinted auf, wenn win.print() zurückkehrt. In Chrome
+// heißt das: Der Dialog ist zu. Ob wirklich gedruckt wurde, verrät der Browser nicht.
+function printHtml(html, onPrinted) {
   const frame = createPrintFrame();
   frame.addEventListener("load", function () {
     const win = frame.contentWindow;
@@ -1254,6 +1290,7 @@ function printHtml(html) {
     Promise.all(decoded).then(function () {
       win.focus();
       win.print();
+      if (onPrinted !== null) { onPrinted(); }
       removeFrameLater(frame, null);
     });
   });
@@ -1262,7 +1299,7 @@ function printHtml(html) {
 }
 
 // Rückfall (z. B. Safari): die PDF selbst in einem unsichtbaren Rahmen drucken.
-function printPdfDirect(bytes) {
+function printPdfDirect(bytes, onPrinted) {
   const blob = new Blob([bytes], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const frame = createPrintFrame();
@@ -1274,22 +1311,23 @@ function printPdfDirect(bytes) {
       console.warn("Direktes Drucken nicht möglich, öffne die PDF stattdessen:", error);
       window.open(url, "_blank");
     }
+    if (onPrinted !== null) { onPrinted(); }
     removeFrameLater(frame, url);
   });
   frame.src = url;
   document.body.appendChild(frame);
 }
 
-async function printPdf(bytes) {
+async function printPdf(bytes, onPrinted = null) {
   showMessage("Druck wird vorbereitet …", "info");
   try {
     const pages = await renderPagesForPrint(bytes);
-    printHtml(buildPrintHtml(pages));
+    printHtml(buildPrintHtml(pages), onPrinted);
     hideMessage();
   } catch (error) {
     console.warn("Druckvorlage konnte nicht gebaut werden, drucke die PDF direkt:", error);
     hideMessage();
-    printPdfDirect(bytes);
+    printPdfDirect(bytes, onPrinted);
   }
 }
 
@@ -1306,9 +1344,20 @@ function downloadBytes(bytes, fileName) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
 }
 
+// Nach dem Druckdialog: Wer die Liste stehen lässt und später weitere Dateien
+// ablegt, druckt die alten sonst mit "Alle drucken" ein zweites Mal.
+function askToClearAfterPrint() {
+  dom.printFollowup.hidden = false;
+}
+
 function printEntry(entry) {
   if (entry.result === null) { return; }
-  printPdf(entry.result.bytes);
+  // Bei mehreren Karten wäre "Alles gedruckt?" nach einem einzelnen Label falsch.
+  if (entries.length === 1) {
+    printPdf(entry.result.bytes, askToClearAfterPrint);
+  } else {
+    printPdf(entry.result.bytes);
+  }
 }
 
 function saveEntry(entry) {
@@ -1400,7 +1449,7 @@ async function printAll() {
   try {
     const bytes = await mergedResults();
     if (bytes === null) { return; }
-    printPdf(bytes);
+    printPdf(bytes, askToClearAfterPrint);
   } catch (error) {
     console.error(error);
     showMessage("Drucken fehlgeschlagen: " + error.message, "error");
@@ -1427,17 +1476,24 @@ async function testPrint(saveInstead) {
 // Liste verwalten, Meldungen
 // ============================================================
 
-function removeEntry(entry) {
+function discardEntry(entry) {
   const index = entries.indexOf(entry);
   if (index >= 0) { entries.splice(index, 1); }
   entry.generation += 1;   // laufende Verarbeitung ins Leere laufen lassen
   if (entry.pdf !== null) { entry.pdf.destroy(); }
   entry.element.remove();
+}
+
+function removeEntry(entry) {
+  discardEntry(entry);
+  refreshDuplicates();
   updateResultsBar();
 }
 
 function clearAll() {
-  for (const entry of entries.slice()) { removeEntry(entry); }
+  for (const entry of entries.slice()) { discardEntry(entry); }
+  dom.printFollowup.hidden = true;
+  updateResultsBar();
   hideMessage();
 }
 
@@ -1587,6 +1643,8 @@ function bindEvents() {
   dom.saveAll.addEventListener("click", saveAll);
   dom.saveMerged.addEventListener("click", saveMerged);
   dom.clearAll.addEventListener("click", clearAll);
+  dom.followupClear.addEventListener("click", clearAll);
+  dom.followupKeep.addEventListener("click", function () { dom.printFollowup.hidden = true; });
 }
 
 // ============================================================

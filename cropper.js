@@ -247,6 +247,14 @@ const LabelCrop = (function () {
     return detectLabel(profiles, mediaBox, text).profile;
   }
 
+  function sameBytes(a, b) {
+    if (a.length !== b.length) { return false; }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) { return false; }
+    }
+    return true;
+  }
+
   // Text der Stapel-Leiste, z. B. "8 Labels · 2 prüfen".
   function describeBatch(total, ready, check) {
     let text = total + " Labels";
@@ -508,6 +516,7 @@ const LabelCrop = (function () {
     detectProfile: detectProfile,
     detectLabel: detectLabel,
     describeBatch: describeBatch,
+    sameBytes: sameBytes,
     sameLabelSize: sameLabelSize,
     cropPdf: cropPdf,
     mergePdfs: mergePdfs,
