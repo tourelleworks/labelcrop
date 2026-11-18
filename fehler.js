@@ -1,7 +1,7 @@
 // „Fehler melden“ für alle TourelleWorks-Apps. Jede App bindet diese Datei mit
 // <script src="/fehler.js" data-app="<projekt>" defer> ein und setzt an ihren Menüeintrag das
 // Attribut data-fehler-melden. Ein Tipp darauf öffnet das Meldefenster; die Meldung geht an
-// tourelleworks.de, wo Cedric sie in der Verwaltung liest. Pflicht ist nur die Beschreibung.
+// tourelleworks.de, wo der Betreiber sie in der Verwaltung liest. Pflicht ist nur die Beschreibung.
 // Gleiche Datei in allen Apps; die Vorlage liegt im Vault unter website/Fehlermeldungen.
 (function () {
   const script = document.currentScript;
