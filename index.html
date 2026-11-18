@@ -17,6 +17,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/fehler.css">
 </head>
 <body>
 
@@ -174,6 +175,7 @@
     <div class="inner">
       <span>Alle Dateien bleiben auf diesem Gerät – nichts wird hochgeladen oder gespeichert.</span>
       <span id="pwa-status">Web-Version</span>
+      <button type="button" class="twf-link" data-fehler-melden="1">Fehler melden</button>
     </div>
   </footer>
 
@@ -261,5 +263,6 @@
   <!-- Aufrufzähler von tourelleworks.de: zählt nur, wie oft die App geöffnet wird, ohne Cookie und ohne IP. -->
   <img src="https://tourelleworks.de/zaehler/labelcrop.gif" alt="" width="1" height="1" hidden referrerpolicy="no-referrer">
   <script src="/zaehler.js" defer></script>
+  <script src="/fehler.js" data-app="labelcrop" defer></script>
 </body>
 </html>
